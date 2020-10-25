@@ -1,6 +1,6 @@
 [package]
 name = "ktra"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["moriturus <moriturus@alimensir.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -11,9 +11,10 @@ categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
 
 [features]
-default = ["simple-auth"]
+default = ["secure-auth"]
 
 simple-auth = ["rand"]
+secure-auth = ["rand", "rust-argon2"]
 
 [dependencies]
 tokio = { version = "0.2", features = ["macros", "rt-threaded", "fs", "blocking", "io-util", "stream"] }
@@ -36,3 +37,5 @@ sled = "0.34"
 clap = "2.33"
 
 rand = { version = "0.7", optional = true }
+rust-argon2 = { version = "0.8", optional = true }
+

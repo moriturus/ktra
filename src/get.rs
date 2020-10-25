@@ -6,20 +6,19 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::{filters::BoxedFilter, Filter, Rejection, Reply};
 
-#[cfg(feature = "simple-auth")]
-use rand::distributions::Alphanumeric;
-#[cfg(feature = "simple-auth")]
-use rand::prelude::*;
-
 #[tracing::instrument(skip(db_manager))]
 pub fn apis(
     db_manager: Arc<Mutex<DbManager>>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    download(path)
-        .or(owners(db_manager.clone()))
-        .or(search(db_manager.clone()))
-        .or(me(db_manager))
+    let routes = download(path).or(owners(db_manager.clone()));
+
+    #[cfg(all(feature = "simple-auth", not(feature = "secure-auth")))]
+    let routes = routes.or(me(db_manager.clone()));
+    #[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+    let routes = routes.or(me());
+
+    routes.or(search(db_manager))
 }
 
 #[tracing::instrument(skip(path))]
@@ -86,6 +85,7 @@ async fn handle_search(
         .await
 }
 
+#[cfg(all(feature = "simple-auth", not(feature = "secure-auth")))]
 #[tracing::instrument(skip(db_manager))]
 fn me(
     db_manager: Arc<Mutex<DbManager>>,
@@ -97,7 +97,15 @@ fn me(
         .and_then(handle_me)
 }
 
-#[cfg(feature = "simple-auth")]
+#[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+#[tracing::instrument]
+fn me() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    warp::get()
+        .and(warp::path!("me"))
+        .map(|| "$ curl -X POST -H 'Content-Type: application/json' -d '{\"password\":\"YOUR PASSWORD\"}' https://<YOURDOMAIN>/ktra/api/v1/login/<YOUR USERNAME>")
+}
+
+#[cfg(all(feature = "simple-auth", not(feature = "secure-auth")))]
 #[tracing::instrument(skip(db_manager, token))]
 async fn handle_me(
     db_manager: Arc<Mutex<DbManager>>,
@@ -109,12 +117,9 @@ async fn handle_me(
         .user_id_for_token(&token)
         .map_err(warp::reject::custom)
         .await?;
-    let new_token: String = tokio::task::block_in_place(|| {
-        rand::thread_rng()
-            .sample_iter(Alphanumeric)
-            .take(32)
-            .collect()
-    });
+    let new_token = random_alphanumeric_string(32)
+        .map_err(warp::reject::custom)
+        .await?;
 
     db_manager
         .set_token(user_id, new_token.clone())

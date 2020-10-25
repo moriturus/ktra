@@ -217,3 +217,16 @@ impl Search {
         }
     }
 }
+
+#[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+#[derive(Clone, Deserialize)]
+pub struct Credential {
+    pub password: String,
+}
+
+#[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+#[derive(Clone, Deserialize)]
+pub struct ChangePassword {
+    pub old_password: String,
+    pub new_password: String,
+}

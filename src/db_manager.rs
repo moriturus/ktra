@@ -9,6 +9,11 @@ use serde::ser::Serialize;
 use sled::{self, Db};
 use std::collections::HashMap;
 
+#[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+use crate::utils::random_alphanumeric_string;
+#[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+use argon2::{self, hash_encoded, verify_encoded, ThreadMode, Variant};
+
 type TokenMap = HashMap<u32, String>;
 
 const WINDOWS_NG_FILENAMES: &[&str] = &[
@@ -17,8 +22,10 @@ const WINDOWS_NG_FILENAMES: &[&str] = &[
 ];
 
 const SCHEMA_VERSION_KEY: &str = "__SCHEMA_VERSION__";
-const SCHEMA_VERSION: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 1];
+const SCHEMA_VERSION: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 2];
 const USERS_KEY: &str = "__USERS__";
+#[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+const PASSWORDS_KEY: &str = "__PASSWORDS__";
 
 pub struct DbManager {
     tree: Db,
@@ -27,10 +34,12 @@ pub struct DbManager {
 impl DbManager {
     #[tracing::instrument(skip(config))]
     pub async fn new(config: &DbConfig) -> Result<DbManager, Error> {
-        let path = &config.db_dir_path;
+        let path = config.db_dir_path.clone();
         tracing::info!("create and/or open database: {:?}", config.db_dir_path);
 
-        let tree = tokio::task::block_in_place(move || sled::open(path)).map_err(Error::Db)?;
+        let tree = tokio::task::spawn_blocking(|| sled::open(path).map_err(Error::Db))
+            .map_err(Error::Join)
+            .await??;
 
         if tree.contains_key(SCHEMA_VERSION_KEY).map_err(Error::Db)? {
             tree.insert(SCHEMA_VERSION_KEY, &SCHEMA_VERSION)
@@ -170,6 +179,21 @@ impl DbManager {
         self.insert("tokens", tokens).await
     }
 
+    #[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+    #[tracing::instrument(skip(self, name))]
+    pub async fn user_by_username(&self, name: impl Into<String>) -> Result<User, Error> {
+        let name = name.into();
+        let login = format!("ktra-secure-auth:{}", name);
+        let mut users: Vec<User> = self.desrialize(USERS_KEY)?.unwrap_or_default();
+
+        users.sort_by_key(|u| u.login.clone());
+        let index = users
+            .binary_search_by_key(&login, |u| u.login.clone())
+            .map_err(|_| Error::InvalidUsername(name))?;
+        Ok(users.remove(index))
+    }
+
+    #[cfg(all(feature = "simple-auth", not(feature = "secure-auth")))]
     #[tracing::instrument(skip(self, user))]
     pub async fn add_new_user(&self, user: User) -> Result<(), Error> {
         let mut users: Vec<User> = self.desrialize(USERS_KEY)?.unwrap_or_default();
@@ -182,6 +206,94 @@ impl DbManager {
 
         users.sort_by_key(|u| u.id);
         self.insert(USERS_KEY, users).await
+    }
+
+    #[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+    #[tracing::instrument(skip(self, user, password))]
+    pub async fn add_new_user(&self, user: User, password: impl Into<String>) -> Result<(), Error> {
+        let mut users: Vec<User> = self.desrialize(USERS_KEY)?.unwrap_or_default();
+        let mut passwords: HashMap<u32, String> =
+            self.desrialize(PASSWORDS_KEY)?.unwrap_or_default();
+
+        let password = password.into();
+        let user_id = user.id;
+
+        if users.iter().any(|u| u.login == user.login) {
+            return Err(Error::UserExists(user.login));
+        } else {
+            users.push(user);
+        }
+
+        let password_insertion = async move {
+            let (config, salt) = argon2_config_and_salt().await?;
+            let encoded_password = hash_encoded(password.as_bytes(), salt.as_bytes(), &config)
+                .map_err(Error::Argon2)?;
+            passwords.insert(user_id, encoded_password);
+            self.insert(PASSWORDS_KEY, passwords).await
+        };
+
+        let user_insertion = async move {
+            users.sort_by_key(|u| u.id);
+            self.insert(USERS_KEY, users).await
+        };
+
+        futures::try_join!(user_insertion, password_insertion).map(sink)
+    }
+
+    #[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+    #[tracing::instrument(skip(self, user_id, password))]
+    pub async fn verify_password(
+        &self,
+        user_id: u32,
+        password: impl Into<String>,
+    ) -> Result<bool, Error> {
+        let password = password.into();
+        let passwords: HashMap<u32, String> = self.desrialize(PASSWORDS_KEY)?.unwrap_or_default();
+
+        if let Some(result) = passwords
+            .get(&user_id)
+            .map(|e| verify_encoded(e, password.as_bytes()))
+        {
+            result.map_err(Error::Argon2)
+        } else {
+            Err(Error::InvalidUser(user_id))
+        }
+    }
+
+    #[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+    #[tracing::instrument(skip(self, user_id, old_password, new_password))]
+    pub async fn change_password(
+        &self,
+        user_id: u32,
+        old_password: impl Into<String>,
+        new_password: impl Into<String>,
+    ) -> Result<(), Error> {
+        let old_password = old_password.into();
+        let new_password = new_password.into();
+
+        if old_password == new_password {
+            return Err(Error::SamePasswords);
+        }
+
+        let mut passwords: HashMap<u32, String> =
+            self.desrialize(PASSWORDS_KEY)?.unwrap_or_default();
+
+        if let Some(encoded_old_password) = passwords.get(&user_id) {
+            if verify_encoded(encoded_old_password, old_password.as_bytes())
+                .map_err(Error::Argon2)?
+            {
+                let (config, salt) = argon2_config_and_salt().await?;
+                let encoded_new_password =
+                    hash_encoded(new_password.as_bytes(), salt.as_bytes(), &config)
+                        .map_err(Error::Argon2)?;
+                passwords.insert(user_id, encoded_new_password);
+                self.insert(PASSWORDS_KEY, passwords).await
+            } else {
+                Err(Error::InvalidPassword)
+            }
+        } else {
+            Err(Error::InvalidUser(user_id))
+        }
     }
 
     #[tracing::instrument(skip(self, name))]
@@ -321,10 +433,13 @@ impl DbManager {
                     Ok((key, value)) => {
                         // the keys in ktra db must be valid UTF-8 string so ignore any validation errors.
                         let key = std::str::from_utf8(&key).ok()?;
-                        if key != USERS_KEY
-                            && key != SCHEMA_VERSION_KEY
-                            && key.contains(&query_string)
-                        {
+
+                        let condition = key != USERS_KEY && key != SCHEMA_VERSION_KEY;
+                        #[cfg(feature = "secure-auth")]
+                        let condition = condition && key != PASSWORDS_KEY;
+                        let condition = condition && key.contains(&query_string);
+
+                        if condition {
                             match serde_json::from_slice::<Entry>(&value)
                                 .map_err(Error::InvalidJson)
                             {
@@ -423,4 +538,17 @@ fn check_crate_name(name: &str) -> Result<(), Error> {
     } else {
         Err(Error::InvalidCrateName(name))
     }
+}
+
+#[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
+#[tracing::instrument]
+async fn argon2_config_and_salt<'a>() -> Result<(argon2::Config<'a>, String), Error> {
+    let config = argon2::Config {
+        variant: Variant::Argon2id,
+        lanes: 4,
+        thread_mode: ThreadMode::Parallel,
+        ..Default::default()
+    };
+    let salt: String = random_alphanumeric_string(32).await?;
+    Ok((config, salt))
 }

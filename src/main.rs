@@ -7,9 +7,11 @@ mod error;
 mod get;
 mod index_manager;
 mod models;
-mod post;
 mod put;
 mod utils;
+
+#[cfg(any(feature = "simple-auth", feature = "secure-auth"))]
+mod post;
 
 use crate::config::Config;
 use crate::db_manager::DbManager;
@@ -27,10 +29,13 @@ fn apis(
     index_manager: Arc<Mutex<IndexManager>>,
     dl_path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    get::apis(db_manager.clone(), dl_path)
-        .or(delete::apis(db_manager.clone(), index_manager.clone()))
-        .or(post::apis(db_manager.clone()))
-        .or(put::apis(db_manager, index_manager))
+    let routes = get::apis(db_manager.clone(), dl_path)
+        .or(delete::apis(db_manager.clone(), index_manager.clone()));
+
+    #[cfg(any(feature = "secure-auth", feature = "simple-auth"))]
+    let routes = routes.or(post::apis(db_manager.clone()));
+
+    routes.or(put::apis(db_manager, index_manager))
 }
 
 #[tracing::instrument(skip(rejection))]
