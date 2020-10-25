@@ -1,4 +1,4 @@
-# Ktra 🚚
+# Ktra 🚚 [![ktra at crates.io](https://img.shields.io/crates/v/ktra.svg)](https://crates.io/crates/ktra)
 
 *Your Little Cargo Registry*.  
 
@@ -10,13 +10,17 @@ In other words, `Ktra` is an all-in-one package of the private cargo registry.
 
 ### Current
 
+#### From 0.1.0
+
 - [x] Minimum [Alternate Registry](https://doc.rust-lang.org/cargo/reference/registries.html) implementation.
 - [x] [Sled](https://github.com/spacejam/sled) as its internal database.
 - [x] Almost pure Rust.
 
-### Planned
+#### From 0.2.0
+- [x] Secure user management.
+    - Via enabling `secure-auth` feature.
 
-- [ ] More secure user management.
+### Planned
 - [ ] OAuth and/or OpenID support.
 - [ ] [Redis](https://redis.io/) support.
 - [ ] [MongoDB](https://www.mongodb.com/) support.
@@ -87,10 +91,11 @@ $ ktra -c /path/to/config.toml
 ```
 
 6. Create user and login
-    - Note 3: *Currently, `ktra` supports this simple authentication way only*.
+    - Note 3: ***From v0.2.0, `ktra` supports and recommends this authentication way.***
+    - Note 4: ***⚠️ The authentication way that is used in v0.1.0 is not convertible with the new one. ⚠️***
 
 ```bash
-$ curl -X POST http://localhost:8000/ktra/api/v1/new_user/alice
+$ curl -X POST -H 'Content-Type: application/json' -d '{"password":"PASSWORD"}' http://localhost:8000/ktra/api/v1/new_user/alice
 {"token":"0N9mgZb3kzxtgGKECFuMkM2RT5xkYhdY"}
 $ cargo login --registry=ktra 0N9mgZb3kzxtgGKECFuMkM2RT5xkYhdY
        Login token for `ktra` saved
@@ -124,6 +129,92 @@ edition = "2018"
 
 [dependencies]
 my_crate = { version = "0.1", registry = "ktra" }
+```
+
+## Ktra Web APIs
+
+`Ktra Web APIs` are extra web APIs that are not specified in the [specification](https://doc.rust-lang.org/cargo/reference/registries.html) but required to manage users.  
+Since all APIs send passwords in ***cleartext***, it is highly recommended that you connect the registry from your local network only *OR* use an HTTPS connection.
+
+### Create a new user
+
+- Specification
+
+<table>
+    <tr>
+        <td>Endpoint</td>
+        <td>/ktra/api/v1/new_user/{user_name}</td>
+    </tr>
+    <tr>
+        <td>Method</td>
+        <td>POST</td>
+    </tr>
+    <tr>
+        <td>Body</td>
+        <td>{ "password": "PASSWORD" }</td>
+    </tr>
+</table>
+
+- Response
+
+```json
+{
+    "token": "TOKEN"
+}
+```
+
+### Login
+
+- Specification
+
+<table>
+    <tr>
+        <td>Endpoint</td>
+        <td>/ktra/api/v1/login/{user_name}</td>
+    </tr>
+    <tr>
+        <td>Method</td>
+        <td>POST</td>
+    </tr>
+    <tr>
+        <td>Body</td>
+        <td>{ "password": "PASSWORD" }</td>
+    </tr>
+</table>
+
+- Response
+
+```json
+{
+    "token": "NEW TOKEN"
+}
+```
+
+### Change password
+
+- Specification
+
+<table>
+    <tr>
+        <td>Endpoint</td>
+        <td>/ktra/api/v1/change_password/{user_name}</td>
+    </tr>
+    <tr>
+        <td>Method</td>
+        <td>POST</td>
+    </tr>
+    <tr>
+        <td>Body</td>
+        <td>{ "old_password": "OLD PASSWORD", "new_password": "NEW PASSWORD" }</td>
+    </tr>
+</table>
+
+- Response
+
+```json
+{
+    "token": "NEW TOKEN"
+}
 ```
 
 ## License
