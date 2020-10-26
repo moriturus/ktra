@@ -4,37 +4,40 @@ use crate::index_manager::IndexManager;
 use crate::models::{Metadata, Owners};
 use crate::utils::{
     authorization_header, empty_json_message, ok_json_message, ok_with_msg_json_message,
-    with_db_manager, with_index_manager,
+    with_db_manager, with_dl_dir_path, with_index_manager,
 };
 use bytes::Bytes;
 use futures::TryFutureExt;
 use semver::Version;
 use sha2::{Digest, Sha256};
 use std::convert::TryInto;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::{Filter, Rejection, Reply};
 
-#[tracing::instrument(skip(db_manager, index_manager))]
+#[tracing::instrument(skip(db_manager, index_manager, dl_dir_path))]
 pub fn apis(
     db_manager: Arc<Mutex<DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
+    dl_dir_path: Arc<PathBuf>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    new(db_manager.clone(), index_manager.clone())
+    new(db_manager.clone(), index_manager.clone(), dl_dir_path)
         .or(unyank(db_manager.clone(), index_manager))
         .or(owners(db_manager))
 }
 
-#[tracing::instrument(skip(db_manager, index_manager))]
+#[tracing::instrument(skip(db_manager, index_manager, dl_dir_path))]
 fn new(
     db_manager: Arc<Mutex<DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
+    dl_dir_path: Arc<PathBuf>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::put()
         .and(with_db_manager(db_manager))
         .and(with_index_manager(index_manager))
         .and(authorization_header())
+        .and(with_dl_dir_path(dl_dir_path))
         .and(warp::path!("api" / "v1" / "crates" / "new"))
         .and(warp::body::bytes())
         .and_then(handle_new)
@@ -45,6 +48,7 @@ async fn handle_new(
     db_manager: Arc<Mutex<DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
     token: String,
+    dl_dir_path: Arc<PathBuf>,
     body: Bytes,
 ) -> Result<impl Reply, Rejection> {
     let db_manager = db_manager.lock().await;
@@ -93,7 +97,6 @@ async fn handle_new(
         map(remainder, crate_length, Result::Ok).map_err(warp::reject::custom)?;
 
     if remainder.is_empty() {
-        let crates_dir_path = format!("crates/{}/{}", metadata.name, metadata.vers);
         let checksum = checksum(&crate_data);
 
         {
@@ -104,6 +107,11 @@ async fn handle_new(
                 .map_err(warp::reject::custom)
                 .await?;
         }
+
+        let mut crates_dir_path = dl_dir_path.to_path_buf();
+        crates_dir_path.push(&metadata.name);
+        crates_dir_path.push(metadata.vers.to_string());
+        let crates_dir_path = crates_dir_path;
 
         save_crate_file(crates_dir_path, &crate_data)
             .map_err(warp::reject::custom)

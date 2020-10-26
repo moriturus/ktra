@@ -9,7 +9,6 @@ use git2::{
 };
 use semver::Version;
 use std::io::SeekFrom;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::OpenOptions;
 use tokio::prelude::*;
@@ -48,7 +47,7 @@ impl IndexManager {
     pub async fn add_package(&self, package: Package) -> Result<(), Error> {
         let name = package.name.to_ascii_lowercase();
 
-        let mut index_path = PathBuf::from("index");
+        let mut index_path = self.config.local_path.clone();
         index_path.push(package_dir_path(&name)?);
         tokio::fs::create_dir_all(&index_path)
             .map_err(Error::Io)
@@ -99,7 +98,7 @@ impl IndexManager {
         yanked: bool,
     ) -> Result<(), Error> {
         let name = name.into();
-        let mut index_path = PathBuf::from("index");
+        let mut index_path = self.config.local_path.clone();
         index_path.push(package_dir_path(&name)?);
         index_path.push(&name);
         let package_path = index_path;

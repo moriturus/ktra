@@ -2,16 +2,18 @@ use crate::db_manager::DbManager;
 use crate::models::{Query, User};
 use crate::utils::*;
 use futures::TryFutureExt;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::{filters::BoxedFilter, Filter, Rejection, Reply};
 
-#[tracing::instrument(skip(db_manager))]
+#[tracing::instrument(skip(db_manager, dl_dir_path, path))]
 pub fn apis(
     db_manager: Arc<Mutex<DbManager>>,
+    dl_dir_path: Arc<PathBuf>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let routes = download(path).or(owners(db_manager.clone()));
+    let routes = download(dl_dir_path, path).or(owners(db_manager.clone()));
 
     #[cfg(all(feature = "simple-auth", not(feature = "secure-auth")))]
     let routes = routes.or(me(db_manager.clone()));
@@ -29,9 +31,12 @@ fn into_boxed_filters(path: Vec<String>) -> BoxedFilter<()> {
     })
 }
 
-#[tracing::instrument(skip(path))]
-fn download(path: Vec<String>) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    into_boxed_filters(path).and(warp::fs::dir("crates"))
+#[tracing::instrument(skip(path, dl_dir_path))]
+fn download(
+    dl_dir_path: Arc<PathBuf>,
+    path: Vec<String>,
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    into_boxed_filters(path).and(warp::fs::dir(dl_dir_path.to_path_buf()))
 }
 
 #[tracing::instrument(skip(db_manager))]
