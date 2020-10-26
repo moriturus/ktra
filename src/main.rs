@@ -23,19 +23,20 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::{Filter, Rejection, Reply};
 
-#[tracing::instrument(skip(db_manager, index_manager))]
+#[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
 fn apis(
     db_manager: Arc<Mutex<DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
+    dl_dir_path: Arc<PathBuf>,
     dl_path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let routes = get::apis(db_manager.clone(), dl_path)
+    let routes = get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
         .or(delete::apis(db_manager.clone(), index_manager.clone()));
 
     #[cfg(any(feature = "secure-auth", feature = "simple-auth"))]
     let routes = routes.or(post::apis(db_manager.clone()));
 
-    routes.or(put::apis(db_manager, index_manager))
+    routes.or(put::apis(db_manager, index_manager, dl_dir_path))
 }
 
 #[tracing::instrument(skip(rejection))]
@@ -63,6 +64,7 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     );
 
     tokio::fs::create_dir_all(&config.crate_files_config.dl_dir_path).await?;
+    let dl_dir_path = config.crate_files_config.dl_dir_path.clone();
     let dl_path = config.crate_files_config.dl_path.clone();
     let server_config = config.server_config.clone();
 
@@ -73,6 +75,7 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     let routes = apis(
         Arc::new(Mutex::new(db_manager)),
         Arc::new(Mutex::new(index_manager)),
+        Arc::new(dl_dir_path),
         dl_path,
     )
     .with(warp::trace::request())

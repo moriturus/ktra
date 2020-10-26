@@ -2,7 +2,7 @@ use crate::db_manager::DbManager;
 use crate::error::Error;
 use crate::index_manager::IndexManager;
 use std::convert::Infallible;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::{Filter, Rejection, Reply};
@@ -68,6 +68,13 @@ pub fn ok_with_msg_json_message(msg: impl Into<String>) -> impl Reply {
         "ok": true,
         "msg": msg.into()
     }))
+}
+
+#[tracing::instrument(skip(dl_dir_path))]
+pub fn with_dl_dir_path(
+    dl_dir_path: Arc<PathBuf>,
+) -> impl Filter<Extract = (Arc<PathBuf>,), Error = Infallible> + Clone {
+    warp::any().map(move || dl_dir_path.clone())
 }
 
 #[tracing::instrument(skip(db_manager))]
