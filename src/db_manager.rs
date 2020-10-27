@@ -293,11 +293,6 @@ impl DbManager {
             return Err(Error::VersionExists(name, version));
         }
 
-        tracing::debug!("user: {}, name: {}, version: {}", user_id, name, version);
-
-        tracing::debug!("entry: {:?}", entry);
-        let latest_version = entry.latest_version();
-        tracing::debug!("latest: {:?}", latest_version);
         let can_add_metadata = entry
             .latest_version()
             .and_then(|v| entry.versions().get(v))
