@@ -43,7 +43,7 @@ fn new(
         .and_then(handle_new)
 }
 
-#[tracing::instrument(skip(db_manager, index_manager, token, body))]
+#[tracing::instrument(skip(db_manager, index_manager, token, dl_dir_path, body))]
 async fn handle_new(
     db_manager: Arc<Mutex<DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,

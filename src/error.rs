@@ -36,13 +36,10 @@ pub enum Error {
     Io(tokio::io::Error),
     #[error("git error: {}", _0)]
     Git(git2::Error),
-    #[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
     #[error("argon2 error: {}", _0)]
     Argon2(argon2::Error),
-    #[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
     #[error("the given passwords are the same")]
     SamePasswords,
-    #[cfg(any(feature = "simple-auth", feature = "secure-auth"))]
     #[error("the user identified '{}' already exists", _0)]
     UserExists(String),
     #[error("the crate, {}, is overlapped with the another one because ktra considers '_' and '-' are the same", _0)]
@@ -69,10 +66,8 @@ pub enum Error {
     InvalidToken(String),
     #[error("invalid user id: {}", _0)]
     InvalidUser(u32),
-    #[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
     #[error("invalid username: {}", _0)]
     InvalidUsername(String),
-    #[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
     #[error("invalid password")]
     InvalidPassword,
     #[error("one or more invalid login names are detected: {:?}", _0)]

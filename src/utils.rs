@@ -1,31 +1,25 @@
 use crate::db_manager::DbManager;
 use crate::error::Error;
 use crate::index_manager::IndexManager;
+use futures::TryFutureExt;
+use rand::distributions::Alphanumeric;
+use rand::prelude::*;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::{Filter, Rejection, Reply};
 
-#[cfg(any(feature = "simple-auth", feature = "secure-auth"))]
-use futures::TryFutureExt;
-#[cfg(any(feature = "simple-auth", feature = "secure-auth"))]
-use rand::distributions::Alphanumeric;
-#[cfg(any(feature = "simple-auth", feature = "secure-auth"))]
-use rand::prelude::*;
-
 #[inline]
 pub fn sink<T>(_: T) {
     // nop
 }
 
-#[cfg(any(feature = "secure-auth", not(feature = "simple-auth")))]
 #[inline]
 pub fn always_true<T>(_: T) -> bool {
     true
 }
 
-#[cfg(any(feature = "simple-auth", feature = "secure-auth"))]
 #[tracing::instrument]
 pub async fn random_alphanumeric_string(length: usize) -> Result<String, Error> {
     tokio::task::spawn_blocking(move || {
