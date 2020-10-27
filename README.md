@@ -4,7 +4,7 @@
 
 `Ktra` is an implementation of the [Alternate Registry](https://doc.rust-lang.org/cargo/reference/registries.html) that is introduced for non-public crates in Rust/Cargo 1.34.
 
-In other words, `Ktra` is an all-in-one package of the private cargo registry.
+In other words, `Ktra` is an all-in-one package for the private cargo registry.
 
 ## Features
 
@@ -18,7 +18,6 @@ In other words, `Ktra` is an all-in-one package of the private cargo registry.
 
 #### From 0.2.0
 - [x] Secure user management.
-    - Via enabling `secure-auth` feature.
 
 ### Planned
 - [ ] OAuth and/or OpenID support.

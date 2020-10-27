@@ -7,11 +7,9 @@ mod error;
 mod get;
 mod index_manager;
 mod models;
+mod post;
 mod put;
 mod utils;
-
-#[cfg(any(feature = "simple-auth", feature = "secure-auth"))]
-mod post;
 
 use crate::config::Config;
 use crate::db_manager::DbManager;
@@ -30,13 +28,10 @@ fn apis(
     dl_dir_path: Arc<PathBuf>,
     dl_path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let routes = get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
-        .or(delete::apis(db_manager.clone(), index_manager.clone()));
-
-    #[cfg(any(feature = "secure-auth", feature = "simple-auth"))]
-    let routes = routes.or(post::apis(db_manager.clone()));
-
-    routes.or(put::apis(db_manager, index_manager, dl_dir_path))
+    get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
+        .or(delete::apis(db_manager.clone(), index_manager.clone()))
+        .or(post::apis(db_manager.clone()))
+        .or(put::apis(db_manager, index_manager, dl_dir_path))
 }
 
 #[tracing::instrument(skip(rejection))]
@@ -195,11 +190,10 @@ async fn main() -> anyhow::Result<()> {
         config.index_config.email = Some(email);
     }
 
-    if let Some(address) = matches.value_of("ADDRESS").map(|s| {
-        s.split('.')
-            .map(|i| i.parse::<u8>().unwrap())
-            .collect::<Vec<u8>>()
-    }) {
+    if let Some(address) = matches
+        .value_of("ADDRESS")
+        .map(|s| s.split('.').map(|i| i.parse().unwrap()).collect::<Vec<_>>())
+    {
         let address: [u8; 4] = [address[0], address[1], address[2], address[3]];
         config.server_config.address = address;
     }

@@ -1,6 +1,6 @@
 [package]
 name = "ktra"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["moriturus <moriturus@alimensir.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -13,7 +13,6 @@ readme = "README.md"
 [features]
 default = ["secure-auth"]
 
-simple-auth = ["rand"]
 secure-auth = ["rand", "rust-argon2"]
 
 [dependencies]

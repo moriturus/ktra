@@ -13,14 +13,10 @@ pub fn apis(
     dl_dir_path: Arc<PathBuf>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let routes = download(dl_dir_path, path).or(owners(db_manager.clone()));
-
-    #[cfg(all(feature = "simple-auth", not(feature = "secure-auth")))]
-    let routes = routes.or(me(db_manager.clone()));
-    #[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
-    let routes = routes.or(me());
-
-    routes.or(search(db_manager))
+    download(dl_dir_path, path)
+        .or(owners(db_manager.clone()))
+        .or(me())
+        .or(search(db_manager))
 }
 
 #[tracing::instrument(skip(path))]
@@ -90,50 +86,11 @@ async fn handle_search(
         .await
 }
 
-#[cfg(all(feature = "simple-auth", not(feature = "secure-auth")))]
-#[tracing::instrument(skip(db_manager))]
-fn me(
-    db_manager: Arc<Mutex<DbManager>>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::get()
-        .and(with_db_manager(db_manager))
-        .and(authorization_header())
-        .and(warp::path!("me"))
-        .and_then(handle_me)
-}
-
-#[cfg(all(feature = "secure-auth", not(feature = "simple-auth")))]
 #[tracing::instrument]
 fn me() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::get()
         .and(warp::path!("me"))
         .map(|| "$ curl -X POST -H 'Content-Type: application/json' -d '{\"password\":\"YOUR PASSWORD\"}' https://<YOURDOMAIN>/ktra/api/v1/login/<YOUR USERNAME>")
-}
-
-#[cfg(all(feature = "simple-auth", not(feature = "secure-auth")))]
-#[tracing::instrument(skip(db_manager, token))]
-async fn handle_me(
-    db_manager: Arc<Mutex<DbManager>>,
-    token: String,
-) -> Result<impl Reply, Rejection> {
-    let db_manager = db_manager.lock().await;
-
-    let user_id = db_manager
-        .user_id_for_token(&token)
-        .map_err(warp::reject::custom)
-        .await?;
-    let new_token = random_alphanumeric_string(32)
-        .map_err(warp::reject::custom)
-        .await?;
-
-    db_manager
-        .set_token(user_id, new_token.clone())
-        .map_err(warp::reject::custom)
-        .await?;
-
-    Ok(warp::reply::json(&serde_json::json!({
-        "new_token": new_token
-    })))
 }
 
 #[tracing::instrument(skip(owners))]
