@@ -9,7 +9,7 @@ use warp::{filters::BoxedFilter, Filter, Rejection, Reply};
 
 #[tracing::instrument(skip(db_manager, dl_dir_path, path))]
 pub fn apis(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     dl_dir_path: Arc<PathBuf>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -37,7 +37,7 @@ fn download(
 
 #[tracing::instrument(skip(db_manager))]
 fn owners(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::get()
         .and(with_db_manager(db_manager))
@@ -48,7 +48,7 @@ fn owners(
 
 #[tracing::instrument(skip(db_manager, _token, name))]
 async fn handle_owners(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     // `token` is not a used argument.
     // the specification demands that the authorization is required but listing owners api does not update the database.
     _token: String,
@@ -64,7 +64,7 @@ async fn handle_owners(
 
 #[tracing::instrument(skip(db_manager))]
 fn search(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::get()
         .and(with_db_manager(db_manager))
@@ -75,7 +75,7 @@ fn search(
 
 #[tracing::instrument(skip(db_manager, query))]
 async fn handle_search(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     query: Query,
 ) -> Result<impl Reply, Rejection> {
     let db_manager = db_manager.lock().await;

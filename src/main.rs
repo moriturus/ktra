@@ -12,18 +12,23 @@ mod put;
 mod utils;
 
 use crate::config::Config;
-use crate::db_manager::DbManager;
 use crate::index_manager::IndexManager;
 use clap::{clap_app, crate_authors, crate_version, ArgMatches};
+use db_manager::DbManager;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::{Filter, Rejection, Reply};
 
+#[cfg(all(feature = "db-redis", not(feature = "db-sled")))]
+use db_manager::RedisDbManager;
+#[cfg(all(feature = "db-sled", not(feature = "db-redis")))]
+use db_manager::SledDbManager;
+
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
 fn apis(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
     dl_dir_path: Arc<PathBuf>,
     dl_path: Vec<String>,
@@ -63,7 +68,10 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     let dl_path = config.crate_files_config.dl_path.clone();
     let server_config = config.server_config.clone();
 
-    let db_manager = DbManager::new(&config.db_config).await?;
+    #[cfg(all(feature = "db-sled", not(feature = "db-redis")))]
+    let db_manager = SledDbManager::new(&config.db_config).await?;
+    #[cfg(all(feature = "db-redis", not(feature = "db-sled")))]
+    let db_manager = RedisDbManager::new(&config.db_config).await?;
     let index_manager = IndexManager::new(config.index_config).await?;
     index_manager.pull().await?;
 
@@ -101,7 +109,8 @@ fn matches() -> ArgMatches<'static> {
         (@arg CONFIG: -c --config +takes_value "Sets a config file")
         (@arg DL_DIR_PATH: --("dl-dir-path") +takes_value "Sets the crate files directory")
         (@arg DL_PATH: --("dl-path") +takes_value ... "Sets a crate files download path")
-        (@arg DB_DIR_PATH: --("db-dir-path") +takes_value "Sets a database directory")
+        (@arg DB_DIR_PATH: --("db-dir-path") +takes_value "Sets a database directory (needs `db-sled` feature)")
+        (@arg REDIS_URL: --("redis-url") + takes_value "Sets a Redis URL (needs `db-redis` feature)")
         (@arg REMOTE_URL: --("remote-url") +takes_value "Sets a URL for the remote index git repository")
         (@arg LOCAL_PATH: --("local-path") +takes_value "Sets a path for local index git repository")
         (@arg BRANCH: --branch +takes_value "Sets a branch name of the index git repository")
@@ -139,8 +148,14 @@ async fn main() -> anyhow::Result<()> {
         config.crate_files_config.dl_path = dl_path;
     }
 
+    #[cfg(feature = "db-sled")]
     if let Some(db_dir_path) = matches.value_of("DB_DIR_PATH").map(PathBuf::from) {
         config.db_config.db_dir_path = db_dir_path;
+    }
+
+    #[cfg(feature = "db-redis")]
+    if let Some(redis_url) = matches.value_of("REDIS_URL").map(ToOwned::to_owned) {
+        config.db_config.redis_url = redis_url;
     }
 
     if let Some(remote_url) = matches.value_of("REMOTE_URL").map(ToOwned::to_owned) {

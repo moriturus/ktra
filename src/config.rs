@@ -67,21 +67,35 @@ impl CrateFilesConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DbConfig {
+    #[cfg(feature = "db-sled")]
     #[serde(default = "DbConfig::db_dir_path_default")]
     pub db_dir_path: PathBuf,
+
+    #[cfg(feature = "db-redis")]
+    #[serde(default = "DbConfig::redis_url_default")]
+    pub redis_url: String,
 }
 
 impl Default for DbConfig {
     fn default() -> DbConfig {
         DbConfig {
+            #[cfg(feature = "db-sled")]
             db_dir_path: DbConfig::db_dir_path_default(),
+            #[cfg(feature = "db-redis")]
+            redis_url: DbConfig::redis_url_default(),
         }
     }
 }
 
 impl DbConfig {
+    #[cfg(feature = "db-sled")]
     fn db_dir_path_default() -> PathBuf {
         PathBuf::from("db")
+    }
+
+    #[cfg(feature = "db-redis")]
+    fn redis_url_default() -> String {
+        "redis://localhost".to_owned()
     }
 }
 

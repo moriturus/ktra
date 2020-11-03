@@ -14,14 +14,18 @@ In other words, `Ktra` is an all-in-one package for the private cargo registry.
 
 - [x] Minimum [Alternate Registry](https://doc.rust-lang.org/cargo/reference/registries.html) implementation.
 - [x] [Sled](https://github.com/spacejam/sled) as its internal database.
+    - via `db-sled` feature turned on by default.
 - [x] Almost pure Rust.
 
 #### From 0.2.0
 - [x] Secure user management.
 
+#### From 0.4.0
+- [x] [Redis](https://redis.io/) support.
+    - via `db-redis` feature.
+
 ### Planned
 - [ ] OAuth and/or OpenID support.
-- [ ] [Redis](https://redis.io/) support.
 - [ ] [MongoDB](https://www.mongodb.com/) support.
 - [ ] RDBMS such as [PostgresQL](https://www.postgresql.org/), [MySQL](https://www.mysql.com/) and [MariaDB](https://mariadb.org/) support.
 - [ ] The crates browser like [crate.io](https://crates.io/)
@@ -72,7 +76,8 @@ https_password = "2mdzctfryqirlqbhys43xsc46rbnr93g"
 
 # below configurations are optional.
 # [db_config]
-# db_path = "my_db"
+# db_path = "my_db" # sled
+# redis_url = "redis://username:password@localhost" # redis
 
 # [crate_files_config]
 # dl_dir_path = "./crates"

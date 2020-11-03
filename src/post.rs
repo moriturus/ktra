@@ -10,7 +10,7 @@ use warp::{Filter, Rejection, Reply};
 
 #[tracing::instrument(skip(db_manager))]
 pub fn apis(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     new_user(db_manager.clone())
         .or(login(db_manager.clone()))
@@ -19,7 +19,7 @@ pub fn apis(
 
 #[tracing::instrument(skip(db_manager))]
 fn new_user(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::post()
         .and(with_db_manager(db_manager))
@@ -30,7 +30,7 @@ fn new_user(
 
 #[tracing::instrument(skip(db_manager, name, credential))]
 async fn handle_new_user(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     name: String,
     credential: Credential,
 ) -> Result<impl Reply, Rejection> {
@@ -45,7 +45,7 @@ async fn handle_new_user(
     let user = User::new(user_id, login_id, Some(name));
 
     db_manager
-        .add_new_user(user, credential.password)
+        .add_new_user(user, &credential.password)
         .map_err(warp::reject::custom)
         .await?;
 
@@ -53,7 +53,7 @@ async fn handle_new_user(
         .map_err(warp::reject::custom)
         .await?;
     db_manager
-        .set_token(user_id, new_token.clone())
+        .set_token(user_id, &new_token)
         .map_err(warp::reject::custom)
         .await?;
 
@@ -64,7 +64,7 @@ async fn handle_new_user(
 
 #[tracing::instrument(skip(db_manager))]
 fn login(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::post()
         .and(with_db_manager(db_manager))
@@ -75,19 +75,19 @@ fn login(
 
 #[tracing::instrument(skip(db_manager, name, credential))]
 async fn handle_login(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     name: String,
     credential: Credential,
 ) -> Result<impl Reply, Rejection> {
     let db_manager = db_manager.lock().await;
 
     let user = db_manager
-        .user_by_username(name)
+        .user_by_username(&name)
         .map_err(warp::reject::custom)
         .await?;
 
     if db_manager
-        .verify_password(user.id, credential.password)
+        .verify_password(user.id, &credential.password)
         .map_err(warp::reject::custom)
         .await?
     {
@@ -95,7 +95,7 @@ async fn handle_login(
             .map_err(warp::reject::custom)
             .await?;
         db_manager
-            .set_token(user.id, new_token.clone())
+            .set_token(user.id, &new_token)
             .map_err(warp::reject::custom)
             .await?;
 
@@ -109,7 +109,7 @@ async fn handle_login(
 
 #[tracing::instrument(skip(db_manager))]
 fn change_password(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::post()
         .and(with_db_manager(db_manager))
@@ -122,14 +122,14 @@ fn change_password(
 
 #[tracing::instrument(skip(db_manager, name, passwords))]
 async fn handle_change_password(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     name: String,
     passwords: ChangePassword,
 ) -> Result<impl Reply, Rejection> {
     let db_manager = db_manager.lock().await;
 
     let user = db_manager
-        .user_by_username(name)
+        .user_by_username(&name)
         .map_err(warp::reject::custom)
         .await?;
 
@@ -143,7 +143,7 @@ async fn handle_change_password(
             .map_err(warp::reject::custom)
             .await?;
         db_manager
-            .set_token(user.id, new_token.clone())
+            .set_token(user.id, &new_token)
             .map_err(warp::reject::custom)
             .await?;
 
