@@ -14,7 +14,7 @@ use warp::{Filter, Rejection, Reply};
 
 #[tracing::instrument(skip(db_manager, index_manager))]
 pub fn apis(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     yank(db_manager.clone(), index_manager).or(owners(db_manager))
@@ -22,7 +22,7 @@ pub fn apis(
 
 #[tracing::instrument(skip(db_manager, index_manager))]
 fn yank(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::delete()
@@ -37,7 +37,7 @@ fn yank(
 
 #[tracing::instrument(skip(db_manager, index_manager, token, crate_name, version))]
 async fn handle_yank(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
     token: String,
     crate_name: String,
@@ -72,7 +72,7 @@ async fn handle_yank(
     }
 
     db_manager
-        .yank(crate_name, version)
+        .yank(&crate_name, version)
         .map_ok(ok_json_message)
         .map_err(warp::reject::custom)
         .await
@@ -80,7 +80,7 @@ async fn handle_yank(
 
 #[tracing::instrument(skip(db_manager))]
 fn owners(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::delete()
         .and(with_db_manager(db_manager))
@@ -92,7 +92,7 @@ fn owners(
 
 #[tracing::instrument(skip(db_manager, token, name, owners))]
 async fn handle_owners(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     token: String,
     name: String,
     owners: Owners,
@@ -113,7 +113,7 @@ async fn handle_owners(
         .await?;
 
     db_manager
-        .remove_owners(&name, owners.logins)
+        .remove_owners(&name, &owners.logins)
         // the specification says the `msg` field is not required but `cargo` command demands it.
         .map_ok(|_| ok_with_msg_json_message(""))
         .map_err(warp::reject::custom)

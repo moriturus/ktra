@@ -1,7 +1,7 @@
 use crate::config::IndexConfig;
 use crate::error::Error;
 use crate::models::Package;
-use crate::utils::{package_dir_path, sink};
+use crate::utils::package_dir_path;
 use futures::TryFutureExt;
 use git2::{
     self, AnnotatedCommit, Commit, Cred, CredentialType, ObjectType, PushOptions, Reference,
@@ -308,7 +308,7 @@ fn normal_merge(
             &result_tree,
             &[&local_commit, &remote_commit],
         )
-        .map(sink)?;
+        .map(drop)?;
     repository.checkout_head(None)
 }
 
@@ -394,7 +394,7 @@ fn commit(
             &tree,
             &[&last_commit],
         )
-        .map(sink)?;
+        .map(drop)?;
     repository.checkout_head(None)
 }
 

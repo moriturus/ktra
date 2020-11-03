@@ -85,8 +85,12 @@ pub enum Error {
         _0
     )]
     VersionNotFoundInDb(Version),
+    #[cfg(all(feature = "db-sled", not(feature = "db-redis")))]
     #[error("error by database: {}", _0)]
     Db(sled::Error),
+    #[cfg(all(feature = "db-redis", not(feature = "db-sled")))]
+    #[error("error by database: {}", _0)]
+    Db(redis::RedisError),
     #[error("multiple errors: {:?}", _0)]
     Multiple(Vec<Error>),
     #[error("task joinning error: {}", _0)]

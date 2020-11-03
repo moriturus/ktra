@@ -18,7 +18,7 @@ use warp::{Filter, Rejection, Reply};
 
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path))]
 pub fn apis(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
     dl_dir_path: Arc<PathBuf>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -29,7 +29,7 @@ pub fn apis(
 
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path))]
 fn new(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
     dl_dir_path: Arc<PathBuf>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -45,7 +45,7 @@ fn new(
 
 #[tracing::instrument(skip(db_manager, index_manager, token, dl_dir_path, body))]
 async fn handle_new(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
     token: String,
     dl_dir_path: Arc<PathBuf>,
@@ -75,14 +75,15 @@ async fn handle_new(
 
     // check if not exist in the database
     let name = metadata.name.clone();
+    let name_cloned = name.clone();
     let version = metadata.vers.clone();
     db_manager
-        .can_add_metadata(user_id, name.clone(), version.clone())
+        .can_add_metadata(user_id, &name, version.clone())
         .and_then(|addable| async move {
             if addable {
                 Ok(())
             } else {
-                Err(Error::OverlappedCrateName(name))
+                Err(Error::OverlappedCrateName(name_cloned))
             }
         })
         .map_err(warp::reject::custom)
@@ -128,7 +129,7 @@ async fn handle_new(
 
 #[tracing::instrument(skip(db_manager, index_manager))]
 fn unyank(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::put()
@@ -143,7 +144,7 @@ fn unyank(
 
 #[tracing::instrument(skip(db_manager, index_manager, token, crate_name, version))]
 async fn handle_unyank(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     index_manager: Arc<Mutex<IndexManager>>,
     token: String,
     crate_name: String,
@@ -178,7 +179,7 @@ async fn handle_unyank(
     }
 
     db_manager
-        .unyank(crate_name, version)
+        .unyank(&crate_name, version)
         .map_ok(ok_json_message)
         .map_err(warp::reject::custom)
         .await
@@ -186,7 +187,7 @@ async fn handle_unyank(
 
 #[tracing::instrument(skip(db_manager))]
 fn owners(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::put()
         .and(with_db_manager(db_manager))
@@ -198,7 +199,7 @@ fn owners(
 
 #[tracing::instrument(skip(db_manager, token, name, owners))]
 async fn handle_owners(
-    db_manager: Arc<Mutex<DbManager>>,
+    db_manager: Arc<Mutex<impl DbManager>>,
     token: String,
     name: String,
     owners: Owners,
@@ -220,7 +221,7 @@ async fn handle_owners(
 
     let logins_cloned = owners.logins.clone();
     db_manager
-        .add_owners(&name, owners.logins)
+        .add_owners(&name, &owners.logins)
         .map_ok(|_| {
             let msg = match logins_cloned.len() {
                 1 => format!(

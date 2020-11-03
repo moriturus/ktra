@@ -11,11 +11,6 @@ use tokio::sync::Mutex;
 use warp::{Filter, Rejection, Reply};
 
 #[inline]
-pub fn sink<T>(_: T) {
-    // nop
-}
-
-#[inline]
 pub fn always_true<T>(_: T) -> bool {
     true
 }
@@ -73,8 +68,8 @@ pub fn with_dl_dir_path(
 
 #[tracing::instrument(skip(db_manager))]
 pub fn with_db_manager(
-    db_manager: Arc<Mutex<DbManager>>,
-) -> impl Filter<Extract = (Arc<Mutex<DbManager>>,), Error = Infallible> + Clone {
+    db_manager: Arc<Mutex<impl DbManager>>,
+) -> impl Filter<Extract = (Arc<Mutex<impl DbManager>>,), Error = Infallible> + Clone {
     warp::any().map(move || db_manager.clone())
 }
 
