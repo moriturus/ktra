@@ -88,6 +88,9 @@ pub enum Error {
     #[cfg(all(feature = "db-sled", not(feature = "db-redis")))]
     #[error("error by database: {}", _0)]
     Db(sled::Error),
+    #[cfg(all(feature = "db-sled", not(feature = "db-redis")))]
+    #[error("error by database: {}", _0)]
+    Transaction(sled::transaction::TransactionError),
     #[cfg(all(feature = "db-redis", not(feature = "db-sled")))]
     #[error("error by database: {}", _0)]
     Db(redis::RedisError),

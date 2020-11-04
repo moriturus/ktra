@@ -18,11 +18,12 @@ use crate::db_manager::utils::{
 use crate::db_manager::DbManager;
 
 const SCHEMA_VERSION_KEY: &str = "__SCHEMA_VERSION__";
-const SCHEMA_VERSION: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 2];
+const SCHEMA_VERSION: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 3];
 const USERS_KEY: &str = "__USERS__";
 const PASSWORDS_KEY: &str = "__PASSWORDS__";
-// NOTES: no underscore prefix and postfix to keep a backward compatibility
-const TOKENS_KEY: &str = "tokens";
+const TOKENS_KEY: &str = "__TOKENS__";
+
+const OLD_TOKENS_KEY: &str = "tokens";
 
 pub struct SledDbManager {
     tree: Db,
@@ -38,14 +39,17 @@ impl DbManager for SledDbManager {
         let tree = tokio::task::spawn_blocking(|| sled::open(path).map_err(Error::Db))
             .map_err(Error::Join)
             .await??;
+        Self::migrate_tokens(&tree).await?;
 
-        if tree.contains_key(SCHEMA_VERSION_KEY).map_err(Error::Db)? {
+        if !tree.contains_key(SCHEMA_VERSION_KEY).map_err(Error::Db)? {
             tree.insert(SCHEMA_VERSION_KEY, &SCHEMA_VERSION)
                 .map(drop)
                 .map_err(Error::Db)?;
+            tree.flush_async().map_err(Error::Db).await?;
         }
 
         let db_manager = SledDbManager { tree };
+
         Ok(db_manager)
     }
 
@@ -460,5 +464,40 @@ impl SledDbManager {
             .map_ok(drop)
             .map_err(Error::Db)
             .await
+    }
+
+    #[tracing::instrument(skip(tree))]
+    async fn migrate_tokens(tree: &Db) -> Result<(), Error> {
+        let schema_version_on_disk: Option<[u8; 8]> =
+            tree.get(SCHEMA_VERSION_KEY).map_err(Error::Db)?.map(|v| {
+                let mut buf: [u8; 8] = [0u8; 8];
+                buf.clone_from_slice(&v);
+                buf
+            });
+        let tokens = tree.get(OLD_TOKENS_KEY).map_err(Error::Db)?;
+
+        if schema_version_on_disk.is_none() && tokens.is_some() {
+            tracing::info!(
+                "current schema version will migrate to {:?}.",
+                SCHEMA_VERSION
+            );
+            let tokens: String = tokens
+                .map(|v| v.to_vec())
+                .map(String::from_utf8)
+                .transpose()
+                .map_err(Error::InvalidUtf8Bytes)?
+                .unwrap_or_default();
+            tree.transaction(|tree| {
+                tree.insert(TOKENS_KEY, tokens.as_str())?;
+                tree.remove(OLD_TOKENS_KEY)?;
+                tree.insert(SCHEMA_VERSION_KEY, &SCHEMA_VERSION)?;
+                Ok(())
+            })
+            .map(drop)
+            .map_err(Error::Transaction)?;
+            tree.flush_async().map_ok(drop).map_err(Error::Db).await
+        } else {
+            Ok(())
+        }
     }
 }
