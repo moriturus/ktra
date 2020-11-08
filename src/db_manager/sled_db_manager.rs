@@ -12,10 +12,10 @@ use serde::ser::Serialize;
 use sled::{self, Db};
 use std::collections::HashMap;
 
-use crate::db_manager::utils::{
-    argon2_config_and_salt, check_crate_name, normalized_crate_name, TokenMap,
-};
+use crate::db_manager::utils::{argon2_config_and_salt, check_crate_name, normalized_crate_name};
 use crate::db_manager::DbManager;
+
+type TokenMap = HashMap<u32, String>;
 
 const SCHEMA_VERSION_KEY: &str = "__SCHEMA_VERSION__";
 const SCHEMA_VERSION: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 3];
@@ -317,6 +317,7 @@ impl DbManager for SledDbManager {
                         let condition = key != USERS_KEY
                             && key != SCHEMA_VERSION_KEY
                             && key != PASSWORDS_KEY
+                            && key != TOKENS_KEY
                             && key.contains(&query_string);
 
                         if condition {

@@ -24,9 +24,12 @@ In other words, `Ktra` is an all-in-one package for the private cargo registry.
 - [x] [Redis](https://redis.io/) support.
     - via `db-redis` feature.
 
+#### From 0.4.2
+- [x] [MongoDB](https://www.mongodb.com/) support.
+    - via `db-mongo` feature.
+
 ### Planned
 - [ ] OAuth and/or OpenID support.
-- [ ] [MongoDB](https://www.mongodb.com/) support.
 - [ ] RDBMS such as [PostgresQL](https://www.postgresql.org/), [MySQL](https://www.mysql.com/) and [MariaDB](https://mariadb.org/) support.
 - [ ] The crates browser like [crate.io](https://crates.io/)
 
@@ -42,6 +45,8 @@ $ cargo install ktra
 
 1. Create the *index git repository*.
     - `Ktra` supports both HTTPS protocol and SSH protocol.
+    - ***Please make sure your branch name***. `main` is the default on `GitHub` but `Gitlab`, `Bitbucket` and other git repository hosting services might not default to `main`.
+    
 2. Put a file named `config.json` and commit then push it to remote repository.
 
 ```bash
@@ -71,6 +76,7 @@ remote_url = "https://github.com/moriturus/ktra-index.git"
 https_username = "moriturus"
 https_password = "2mdzctfryqirlqbhys43xsc46rbnr93g" 
 # ssh_privkey_path = "/path/to/your/private_key"
+# branch = "master"
 # name = "committer/author name"
 # email = "robot@example.com"
 

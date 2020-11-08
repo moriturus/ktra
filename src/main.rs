@@ -21,9 +21,20 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::{Filter, Rejection, Reply};
 
-#[cfg(all(feature = "db-redis", not(feature = "db-sled")))]
+#[cfg(all(
+    feature = "db-mongo",
+    not(all(feature = "db-redis", feature = "db-sled"))
+))]
+use db_manager::MongoDbManager;
+#[cfg(all(
+    feature = "db-redis",
+    not(all(feature = "db-sled", feature = "db-mongo"))
+))]
 use db_manager::RedisDbManager;
-#[cfg(all(feature = "db-sled", not(feature = "db-redis")))]
+#[cfg(all(
+    feature = "db-sled",
+    not(all(feature = "db-redis", feature = "db-mongo"))
+))]
 use db_manager::SledDbManager;
 
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
@@ -68,10 +79,21 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     let dl_path = config.crate_files_config.dl_path.clone();
     let server_config = config.server_config.clone();
 
-    #[cfg(all(feature = "db-sled", not(feature = "db-redis")))]
+    #[cfg(all(
+        feature = "db-sled",
+        not(all(feature = "db-redis", feature = "db-mongo"))
+    ))]
     let db_manager = SledDbManager::new(&config.db_config).await?;
-    #[cfg(all(feature = "db-redis", not(feature = "db-sled")))]
+    #[cfg(all(
+        feature = "db-redis",
+        not(all(feature = "db-sled", feature = "db-mongo"))
+    ))]
     let db_manager = RedisDbManager::new(&config.db_config).await?;
+    #[cfg(all(
+        feature = "db-mongo",
+        not(all(feature = "db-sled", feature = "db-redis"))
+    ))]
+    let db_manager = MongoDbManager::new(&config.db_config).await?;
     let index_manager = IndexManager::new(config.index_config).await?;
     index_manager.pull().await?;
 
@@ -111,6 +133,7 @@ fn matches() -> ArgMatches<'static> {
         (@arg DL_PATH: --("dl-path") +takes_value ... "Sets a crate files download path")
         (@arg DB_DIR_PATH: --("db-dir-path") +takes_value "Sets a database directory (needs `db-sled` feature)")
         (@arg REDIS_URL: --("redis-url") + takes_value "Sets a Redis URL (needs `db-redis` feature)")
+        (@arg MONGODB_URL: --("mongodb-url") + takes_value "Sets a MongoDB URL (needs `db-mongo` feature)")
         (@arg REMOTE_URL: --("remote-url") +takes_value "Sets a URL for the remote index git repository")
         (@arg LOCAL_PATH: --("local-path") +takes_value "Sets a path for local index git repository")
         (@arg BRANCH: --branch +takes_value "Sets a branch name of the index git repository")
@@ -156,6 +179,11 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(feature = "db-redis")]
     if let Some(redis_url) = matches.value_of("REDIS_URL").map(ToOwned::to_owned) {
         config.db_config.redis_url = redis_url;
+    }
+
+    #[cfg(feature = "db-mongo")]
+    if let Some(mongodb_url) = matches.value_of("MONGODB_URL").map(ToOwned::to_owned) {
+        config.db_config.mongodb_url = mongodb_url;
     }
 
     if let Some(remote_url) = matches.value_of("REMOTE_URL").map(ToOwned::to_owned) {

@@ -1,14 +1,11 @@
 use crate::error::Error;
 use crate::utils::random_alphanumeric_string;
 use argon2::{self, ThreadMode, Variant};
-use std::collections::HashMap;
 
 const WINDOWS_NG_FILENAMES: &[&str] = &[
     "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
     "com9",
 ];
-
-pub type TokenMap = HashMap<u32, String>;
 
 #[tracing::instrument(skip(name))]
 pub fn normalized_crate_name(name: &str) -> String {
