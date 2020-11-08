@@ -38,6 +38,12 @@ pub enum Error {
     Git(git2::Error),
     #[error("argon2 error: {}", _0)]
     Argon2(argon2::Error),
+    #[cfg(all(
+        feature = "db-mongo",
+        not(all(feature = "db-sled", feature = "db-redis"))
+    ))]
+    #[error("URL parsing error: {}", _0)]
+    UrlParsing(url::ParseError),
     #[error("the given passwords are the same")]
     SamePasswords,
     #[error("the user identified '{}' already exists", _0)]
@@ -60,6 +66,18 @@ pub enum Error {
     NotYetYanked(String, Version),
     #[error("serialization error: {}", _0)]
     Serialization(serde_json::Error),
+    #[cfg(all(
+        feature = "db-mongo",
+        not(all(feature = "db-sled", feature = "db-redis"))
+    ))]
+    #[error("serialization error: {}", _0)]
+    BsonSerialization(bson::ser::Error),
+    #[cfg(all(
+        feature = "db-mongo",
+        not(all(feature = "db-sled", feature = "db-redis"))
+    ))]
+    #[error("deserialization error: {}", _0)]
+    BsonDeserialization(bson::de::Error),
     #[error("invalid crate name: {}", _0)]
     InvalidCrateName(String),
     #[error("invalid token: {}", _0)]
@@ -85,15 +103,30 @@ pub enum Error {
         _0
     )]
     VersionNotFoundInDb(Version),
-    #[cfg(all(feature = "db-sled", not(feature = "db-redis")))]
+    #[cfg(all(
+        feature = "db-sled",
+        not(all(feature = "db-redis", feature = "db-mongo"))
+    ))]
     #[error("error by database: {}", _0)]
     Db(sled::Error),
-    #[cfg(all(feature = "db-sled", not(feature = "db-redis")))]
+    #[cfg(all(
+        feature = "db-sled",
+        not(all(feature = "db-redis", feature = "db-mongo"))
+    ))]
     #[error("error by database: {}", _0)]
     Transaction(sled::transaction::TransactionError),
-    #[cfg(all(feature = "db-redis", not(feature = "db-sled")))]
+    #[cfg(all(
+        feature = "db-redis",
+        not(all(feature = "db-sled", feature = "db-mongo"))
+    ))]
     #[error("error by database: {}", _0)]
     Db(redis::RedisError),
+    #[cfg(all(
+        feature = "db-mongo",
+        not(all(feature = "db-sled", feature = "db-redis"))
+    ))]
+    #[error("error by database: {}", _0)]
+    Db(mongodb::error::Error),
     #[error("multiple errors: {:?}", _0)]
     Multiple(Vec<Error>),
     #[error("task joinning error: {}", _0)]

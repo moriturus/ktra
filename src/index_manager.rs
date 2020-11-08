@@ -14,8 +14,6 @@ use tokio::fs::OpenOptions;
 use tokio::prelude::*;
 use tokio::sync::Mutex;
 
-//pub enum GitRemoteConnectionMethod
-
 pub struct IndexManager {
     config: IndexConfig,
     repository: Arc<Mutex<Repository>>,
