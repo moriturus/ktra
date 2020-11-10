@@ -18,7 +18,7 @@ use db_manager::DbManager;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};
 
 #[cfg(all(
@@ -39,8 +39,8 @@ use db_manager::SledDbManager;
 
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
 fn apis(
-    db_manager: Arc<Mutex<impl DbManager>>,
-    index_manager: Arc<Mutex<IndexManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
     dl_dir_path: Arc<PathBuf>,
     dl_path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -98,8 +98,8 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     index_manager.pull().await?;
 
     let routes = apis(
-        Arc::new(Mutex::new(db_manager)),
-        Arc::new(Mutex::new(index_manager)),
+        Arc::new(RwLock::new(db_manager)),
+        Arc::new(index_manager),
         Arc::new(dl_dir_path),
         dl_path,
     )

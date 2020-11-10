@@ -5,12 +5,12 @@ use crate::models::{ChangePassword, Credential};
 use crate::utils::*;
 use futures::TryFutureExt;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};
 
 #[tracing::instrument(skip(db_manager))]
 pub fn apis(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     new_user(db_manager.clone())
         .or(login(db_manager.clone()))
@@ -19,7 +19,7 @@ pub fn apis(
 
 #[tracing::instrument(skip(db_manager))]
 fn new_user(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::post()
         .and(with_db_manager(db_manager))
@@ -30,11 +30,11 @@ fn new_user(
 
 #[tracing::instrument(skip(db_manager, name, credential))]
 async fn handle_new_user(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
     name: String,
     credential: Credential,
 ) -> Result<impl Reply, Rejection> {
-    let db_manager = db_manager.lock().await;
+    let db_manager = db_manager.write().await;
 
     let user_id = db_manager
         .last_user_id()
@@ -64,7 +64,7 @@ async fn handle_new_user(
 
 #[tracing::instrument(skip(db_manager))]
 fn login(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::post()
         .and(with_db_manager(db_manager))
@@ -75,11 +75,11 @@ fn login(
 
 #[tracing::instrument(skip(db_manager, name, credential))]
 async fn handle_login(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
     name: String,
     credential: Credential,
 ) -> Result<impl Reply, Rejection> {
-    let db_manager = db_manager.lock().await;
+    let db_manager = db_manager.write().await;
 
     let user = db_manager
         .user_by_username(&name)
@@ -109,7 +109,7 @@ async fn handle_login(
 
 #[tracing::instrument(skip(db_manager))]
 fn change_password(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::post()
         .and(with_db_manager(db_manager))
@@ -122,11 +122,11 @@ fn change_password(
 
 #[tracing::instrument(skip(db_manager, name, passwords))]
 async fn handle_change_password(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
     name: String,
     passwords: ChangePassword,
 ) -> Result<impl Reply, Rejection> {
-    let db_manager = db_manager.lock().await;
+    let db_manager = db_manager.write().await;
 
     let user = db_manager
         .user_by_username(&name)

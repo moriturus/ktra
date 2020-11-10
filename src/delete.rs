@@ -9,21 +9,21 @@ use crate::utils::{
 use futures::TryFutureExt;
 use semver::Version;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};
 
 #[tracing::instrument(skip(db_manager, index_manager))]
 pub fn apis(
-    db_manager: Arc<Mutex<impl DbManager>>,
-    index_manager: Arc<Mutex<IndexManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     yank(db_manager.clone(), index_manager).or(owners(db_manager))
 }
 
 #[tracing::instrument(skip(db_manager, index_manager))]
 fn yank(
-    db_manager: Arc<Mutex<impl DbManager>>,
-    index_manager: Arc<Mutex<IndexManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::delete()
         .and(with_db_manager(db_manager))
@@ -37,13 +37,13 @@ fn yank(
 
 #[tracing::instrument(skip(db_manager, index_manager, token, crate_name, version))]
 async fn handle_yank(
-    db_manager: Arc<Mutex<impl DbManager>>,
-    index_manager: Arc<Mutex<IndexManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
     token: String,
     crate_name: String,
     version: Version,
 ) -> Result<impl Reply, Rejection> {
-    let db_manager = db_manager.lock().await;
+    let db_manager = db_manager.write().await;
 
     let user_id = db_manager
         .user_id_for_token(&token)
@@ -63,13 +63,10 @@ async fn handle_yank(
         .map_err(warp::reject::custom)
         .await?;
 
-    {
-        let index_manager = index_manager.lock().await;
-        index_manager
-            .yank(&crate_name, version.clone())
-            .map_err(warp::reject::custom)
-            .await?;
-    }
+    index_manager
+        .yank(&crate_name, version.clone())
+        .map_err(warp::reject::custom)
+        .await?;
 
     db_manager
         .yank(&crate_name, version)
@@ -80,7 +77,7 @@ async fn handle_yank(
 
 #[tracing::instrument(skip(db_manager))]
 fn owners(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::delete()
         .and(with_db_manager(db_manager))
@@ -92,7 +89,7 @@ fn owners(
 
 #[tracing::instrument(skip(db_manager, token, name, owners))]
 async fn handle_owners(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
     token: String,
     name: String,
     owners: Owners,
@@ -101,7 +98,7 @@ async fn handle_owners(
         return Err(warp::reject::custom(Error::LoginsNotDefined));
     }
 
-    let db_manager = db_manager.lock().await;
+    let db_manager = db_manager.write().await;
 
     let user_id = db_manager
         .user_id_for_token(&token)

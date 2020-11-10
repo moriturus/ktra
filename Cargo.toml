@@ -1,6 +1,6 @@
 [package]
 name = "ktra"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["moriturus <moriturus@alimensir.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -9,6 +9,7 @@ repository = "https://github.com/moriturus/ktra"
 keywords = ["ktra", "registry", "cargo"]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
+documentation = "https://book.ktra.dev"
 
 [features]
 default = ["secure-auth", "db-sled"]
