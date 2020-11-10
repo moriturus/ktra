@@ -13,13 +13,13 @@ use sha2::{Digest, Sha256};
 use std::convert::TryInto;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};
 
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path))]
 pub fn apis(
-    db_manager: Arc<Mutex<impl DbManager>>,
-    index_manager: Arc<Mutex<IndexManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
     dl_dir_path: Arc<PathBuf>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     new(db_manager.clone(), index_manager.clone(), dl_dir_path)
@@ -29,8 +29,8 @@ pub fn apis(
 
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path))]
 fn new(
-    db_manager: Arc<Mutex<impl DbManager>>,
-    index_manager: Arc<Mutex<IndexManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
     dl_dir_path: Arc<PathBuf>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::put()
@@ -45,13 +45,13 @@ fn new(
 
 #[tracing::instrument(skip(db_manager, index_manager, token, dl_dir_path, body))]
 async fn handle_new(
-    db_manager: Arc<Mutex<impl DbManager>>,
-    index_manager: Arc<Mutex<IndexManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
     token: String,
     dl_dir_path: Arc<PathBuf>,
     body: Bytes,
 ) -> Result<impl Reply, Rejection> {
-    let db_manager = db_manager.lock().await;
+    let db_manager = db_manager.write().await;
 
     let user_id = db_manager
         .user_id_for_token(&token)
@@ -100,14 +100,11 @@ async fn handle_new(
     if remainder.is_empty() {
         let checksum = checksum(&crate_data);
 
-        {
-            let index_manager = index_manager.lock().await;
-            let package = metadata.to_package(checksum);
-            index_manager
-                .add_package(package)
-                .map_err(warp::reject::custom)
-                .await?;
-        }
+        let package = metadata.to_package(checksum);
+        index_manager
+            .add_package(package)
+            .map_err(warp::reject::custom)
+            .await?;
 
         let mut crates_dir_path = dl_dir_path.to_path_buf();
         crates_dir_path.push(&metadata.name);
@@ -129,8 +126,8 @@ async fn handle_new(
 
 #[tracing::instrument(skip(db_manager, index_manager))]
 fn unyank(
-    db_manager: Arc<Mutex<impl DbManager>>,
-    index_manager: Arc<Mutex<IndexManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::put()
         .and(with_db_manager(db_manager))
@@ -144,13 +141,13 @@ fn unyank(
 
 #[tracing::instrument(skip(db_manager, index_manager, token, crate_name, version))]
 async fn handle_unyank(
-    db_manager: Arc<Mutex<impl DbManager>>,
-    index_manager: Arc<Mutex<IndexManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
     token: String,
     crate_name: String,
     version: Version,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    let db_manager = db_manager.lock().await;
+    let db_manager = db_manager.write().await;
 
     let user_id = db_manager
         .user_id_for_token(&token)
@@ -170,13 +167,10 @@ async fn handle_unyank(
         .map_err(warp::reject::custom)
         .await?;
 
-    {
-        let index_manager = index_manager.lock().await;
-        index_manager
-            .unyank(&crate_name, version.clone())
-            .map_err(warp::reject::custom)
-            .await?;
-    }
+    index_manager
+        .unyank(&crate_name, version.clone())
+        .map_err(warp::reject::custom)
+        .await?;
 
     db_manager
         .unyank(&crate_name, version)
@@ -187,7 +181,7 @@ async fn handle_unyank(
 
 #[tracing::instrument(skip(db_manager))]
 fn owners(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::put()
         .and(with_db_manager(db_manager))
@@ -199,7 +193,7 @@ fn owners(
 
 #[tracing::instrument(skip(db_manager, token, name, owners))]
 async fn handle_owners(
-    db_manager: Arc<Mutex<impl DbManager>>,
+    db_manager: Arc<RwLock<impl DbManager>>,
     token: String,
     name: String,
     owners: Owners,
@@ -208,7 +202,7 @@ async fn handle_owners(
         return Err(warp::reject::custom(Error::LoginsNotDefined));
     }
 
-    let db_manager = db_manager.lock().await;
+    let db_manager = db_manager.write().await;
 
     let user_id = db_manager
         .user_id_for_token(&token)

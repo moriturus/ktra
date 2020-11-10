@@ -7,7 +7,7 @@ use rand::prelude::*;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};
 
 #[inline]
@@ -68,15 +68,15 @@ pub fn with_dl_dir_path(
 
 #[tracing::instrument(skip(db_manager))]
 pub fn with_db_manager(
-    db_manager: Arc<Mutex<impl DbManager>>,
-) -> impl Filter<Extract = (Arc<Mutex<impl DbManager>>,), Error = Infallible> + Clone {
+    db_manager: Arc<RwLock<impl DbManager>>,
+) -> impl Filter<Extract = (Arc<RwLock<impl DbManager>>,), Error = Infallible> + Clone {
     warp::any().map(move || db_manager.clone())
 }
 
 #[tracing::instrument(skip(index_manager))]
 pub fn with_index_manager(
-    index_manager: Arc<Mutex<IndexManager>>,
-) -> impl Filter<Extract = (Arc<Mutex<IndexManager>>,), Error = Infallible> + Clone {
+    index_manager: Arc<IndexManager>,
+) -> impl Filter<Extract = (Arc<IndexManager>,), Error = Infallible> + Clone {
     warp::any().map(move || index_manager.clone())
 }
 
