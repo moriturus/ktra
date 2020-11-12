@@ -1,0 +1,7 @@
+/target
+/index
+/db
+/crates
+/.git
+Cargo.lock
+
