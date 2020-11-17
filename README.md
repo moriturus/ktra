@@ -1,4 +1,5 @@
 # Ktra 🚚 [![ktra at crates.io](https://img.shields.io/crates/v/ktra.svg)](https://crates.io/crates/ktra)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fmoriturus%2Fktra.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fmoriturus%2Fktra?ref=badge_shield)
 
 *Your Little Cargo Registry*.  
 
@@ -43,3 +44,5 @@ And any feature requests are welcome!
 ## License
 
 Licensed under either of Apache License, Version 2.0 or MIT license at your option.
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fmoriturus%2Fktra.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fmoriturus%2Fktra?ref=badge_large)
