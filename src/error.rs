@@ -39,7 +39,7 @@ pub enum Error {
     #[error("argon2 error: {}", _0)]
     Argon2(argon2::Error),
     #[cfg(all(
-        feature = "db-mongo",
+        any(feature = "db-mongo", feature = "crates-io-mirroring"),
         not(all(feature = "db-sled", feature = "db-redis"))
     ))]
     #[error("URL parsing error: {}", _0)]
@@ -131,6 +131,12 @@ pub enum Error {
     Multiple(Vec<Error>),
     #[error("task joinning error: {}", _0)]
     Join(tokio::task::JoinError),
+    #[cfg(feature = "crates-io-mirroring")]
+    #[error("HTTP request error: {}", _0)]
+    HttpRequest(reqwest::Error),
+    #[cfg(feature = "crates-io-mirroring")]
+    #[error("HTTP response building error: {}", _0)]
+    HttpResponseBuilding(warp::http::Error),
 }
 
 impl Error {

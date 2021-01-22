@@ -11,7 +11,7 @@ use semver::Version;
 use std::io::SeekFrom;
 use std::sync::Arc;
 use tokio::fs::OpenOptions;
-use tokio::prelude::*;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 
 pub struct IndexManager {

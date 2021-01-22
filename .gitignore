@@ -108,6 +108,7 @@ $RECYCLE.BIN/
 *.lnk
 
 /crates/
+/crates_io_caches/
 /db/
 /index/
 ktra.toml
