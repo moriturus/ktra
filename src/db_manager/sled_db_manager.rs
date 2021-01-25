@@ -121,7 +121,7 @@ impl DbManager for SledDbManager {
                 map.iter()
                     .find_map(|(k, v)| if v == &token { Some(*k) } else { None })
             })
-            .ok_or_else(|| Error::InvalidToken(token))
+            .ok_or(Error::InvalidToken(token))
     }
 
     #[tracing::instrument(skip(self, user_id, token))]

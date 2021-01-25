@@ -15,6 +15,8 @@ use crate::config::Config;
 use crate::index_manager::IndexManager;
 use clap::{clap_app, crate_authors, crate_version, ArgMatches};
 use db_manager::DbManager;
+#[cfg(feature = "crates-io-mirroring")]
+use reqwest::Client;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -37,6 +39,36 @@ use db_manager::RedisDbManager;
 ))]
 use db_manager::SledDbManager;
 
+#[cfg(feature = "crates-io-mirroring")]
+#[tracing::instrument(skip(
+    db_manager,
+    index_manager,
+    dl_dir_path,
+    http_client,
+    cache_dir_path,
+    dl_path
+))]
+fn apis(
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
+    dl_dir_path: Arc<PathBuf>,
+    http_client: Client,
+    cache_dir_path: Arc<PathBuf>,
+    dl_path: Vec<String>,
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    get::apis(
+        db_manager.clone(),
+        dl_dir_path.clone(),
+        http_client,
+        cache_dir_path,
+        dl_path,
+    )
+    .or(delete::apis(db_manager.clone(), index_manager.clone()))
+    .or(post::apis(db_manager.clone()))
+    .or(put::apis(db_manager, index_manager, dl_dir_path))
+}
+
+#[cfg(not(feature = "crates-io-mirroring"))]
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
 fn apis(
     db_manager: Arc<RwLock<impl DbManager>>,
@@ -75,7 +107,11 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     );
 
     tokio::fs::create_dir_all(&config.crate_files_config.dl_dir_path).await?;
+    #[cfg(feature = "crates-io-mirroring")]
+    tokio::fs::create_dir_all(&config.crate_files_config.cache_dir_path).await?;
     let dl_dir_path = config.crate_files_config.dl_dir_path.clone();
+    #[cfg(feature = "crates-io-mirroring")]
+    let cache_dir_path = config.crate_files_config.cache_dir_path.clone();
     let dl_path = config.crate_files_config.dl_path.clone();
     let server_config = config.server_config.clone();
 
@@ -97,10 +133,16 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     let index_manager = IndexManager::new(config.index_config).await?;
     index_manager.pull().await?;
 
+    let http_client = Client::builder().build()?;
+
     let routes = apis(
         Arc::new(RwLock::new(db_manager)),
         Arc::new(index_manager),
         Arc::new(dl_dir_path),
+        #[cfg(feature = "crates-io-mirroring")]
+        http_client,
+        #[cfg(feature = "crates-io-mirroring")]
+        Arc::new(cache_dir_path),
         dl_path,
     )
     .with(warp::trace::request())
@@ -130,6 +172,7 @@ fn matches() -> ArgMatches<'static> {
         (about: "Your Little Cargo Registry.")
         (@arg CONFIG: -c --config +takes_value "Sets a config file")
         (@arg DL_DIR_PATH: --("dl-dir-path") +takes_value "Sets the crate files directory")
+        (@arg CACHE_DIR_PATH: --("cache-dir-path") +takes_value "Sets the crates.io cache files directory (needs `crates-io-mirroring` feature)")
         (@arg DL_PATH: --("dl-path") +takes_value ... "Sets a crate files download path")
         (@arg DB_DIR_PATH: --("db-dir-path") +takes_value "Sets a database directory (needs `db-sled` feature)")
         (@arg REDIS_URL: --("redis-url") + takes_value "Sets a Redis URL (needs `db-redis` feature)")
@@ -162,6 +205,11 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(dl_dir_path) = matches.value_of("DL_DIR_PATH").map(PathBuf::from) {
         config.crate_files_config.dl_dir_path = dl_dir_path;
+    }
+
+    #[cfg(feature = "crates-io-mirroring")]
+    if let Some(cache_dir_path) = matches.value_of("CACHE_DIR_PATH").map(PathBuf::from) {
+        config.crate_files_config.cache_dir_path = cache_dir_path;
     }
 
     if let Some(dl_path) = matches

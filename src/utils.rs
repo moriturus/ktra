@@ -4,6 +4,8 @@ use crate::index_manager::IndexManager;
 use futures::TryFutureExt;
 use rand::distributions::Alphanumeric;
 use rand::prelude::*;
+#[cfg(feature = "crates-io-mirroring")]
+use reqwest::Client;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -13,6 +15,13 @@ use warp::{Filter, Rejection, Reply};
 #[inline]
 pub fn always_true<T>(_: T) -> bool {
     true
+}
+
+#[tracing::instrument(skip(path))]
+pub async fn file_exists(path: impl AsRef<Path>) -> bool {
+    tokio::fs::metadata(path)
+        .map_ok_or_else(|_| false, |_| true)
+        .await
 }
 
 #[tracing::instrument]
@@ -64,6 +73,22 @@ pub fn with_dl_dir_path(
     dl_dir_path: Arc<PathBuf>,
 ) -> impl Filter<Extract = (Arc<PathBuf>,), Error = Infallible> + Clone {
     warp::any().map(move || dl_dir_path.clone())
+}
+
+#[cfg(feature = "crates-io-mirroring")]
+#[tracing::instrument(skip(cache_dir_path))]
+pub fn with_cache_dir_path(
+    cache_dir_path: Arc<PathBuf>,
+) -> impl Filter<Extract = (Arc<PathBuf>,), Error = Infallible> + Clone {
+    warp::any().map(move || cache_dir_path.clone())
+}
+
+#[cfg(feature = "crates-io-mirroring")]
+#[tracing::instrument(skip(client))]
+pub fn with_http_client(
+    client: Client,
+) -> impl Filter<Extract = (Client,), Error = Infallible> + Clone {
+    warp::any().map(move || client.clone())
 }
 
 #[tracing::instrument(skip(db_manager))]

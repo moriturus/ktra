@@ -3,8 +3,7 @@ use serde::Deserialize;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use tokio::fs::OpenOptions;
-use tokio::io::BufReader;
-use tokio::prelude::*;
+use tokio::io::{AsyncReadExt, BufReader};
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct IndexConfig {
@@ -42,6 +41,9 @@ impl IndexConfig {
 pub struct CrateFilesConfig {
     #[serde(default = "CrateFilesConfig::dl_dir_path_default")]
     pub dl_dir_path: PathBuf,
+    #[cfg(feature = "crates-io-mirroring")]
+    #[serde(default = "CrateFilesConfig::cache_dir_path_default")]
+    pub cache_dir_path: PathBuf,
     #[serde(default = "CrateFilesConfig::dl_path_default")]
     pub dl_path: Vec<String>,
 }
@@ -50,6 +52,8 @@ impl Default for CrateFilesConfig {
     fn default() -> CrateFilesConfig {
         CrateFilesConfig {
             dl_dir_path: CrateFilesConfig::dl_dir_path_default(),
+            #[cfg(feature = "crates-io-mirroring")]
+            cache_dir_path: CrateFilesConfig::cache_dir_path_default(),
             dl_path: CrateFilesConfig::dl_path_default(),
         }
     }
@@ -58,6 +62,11 @@ impl Default for CrateFilesConfig {
 impl CrateFilesConfig {
     pub fn dl_dir_path_default() -> PathBuf {
         PathBuf::from("crates")
+    }
+
+    #[cfg(feature = "crates-io-mirroring")]
+    pub fn cache_dir_path_default() -> PathBuf {
+        PathBuf::from("crates_io_caches")
     }
 
     pub fn dl_path_default() -> Vec<String> {

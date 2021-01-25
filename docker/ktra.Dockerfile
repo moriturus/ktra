@@ -1,9 +1,10 @@
 FROM ekidd/rust-musl-builder:stable as builder
 
 ARG DB="db-sled"
+ARG MIRRORING="crates-io-mirroring"
 COPY --chown=rust:rust . /build
 WORKDIR /build
-RUN cargo build --release --no-default-features --features=secure-auth,${DB}
+RUN cargo build --release --no-default-features --features=secure-auth,${DB},${MIRRORING}
 
 FROM scratch
 
