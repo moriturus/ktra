@@ -54,7 +54,7 @@ pub struct MongoDbManager {
 #[async_trait]
 impl DbManager for MongoDbManager {
     #[tracing::instrument(skip(config))]
-    pub async fn new(config: &DbConfig) -> Result<MongoDbManager, Error> {
+    async fn new(config: &DbConfig) -> Result<MongoDbManager, Error> {
         tracing::info!("connect to MongoDB server: {}", config.mongodb_url);
 
         let url = Url::parse(&config.mongodb_url).map_err(Error::UrlParsing)?;
@@ -87,7 +87,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, user_id, name))]
-    pub async fn can_edit_owners(&self, user_id: u32, name: &str) -> Result<bool, Error> {
+    async fn can_edit_owners(&self, user_id: u32, name: &str) -> Result<bool, Error> {
         check_crate_name(&name)?;
 
         let entry = self.entry(&name).await?;
@@ -102,7 +102,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, name))]
-    pub async fn owners(&self, name: &str) -> Result<Vec<User>, Error> {
+    async fn owners(&self, name: &str) -> Result<Vec<User>, Error> {
         let normalized_crate_name = normalized_crate_name(name);
         let collection = self
             .client
@@ -158,7 +158,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, name, logins))]
-    pub async fn add_owners(&self, name: &str, logins: &[String]) -> Result<(), Error> {
+    async fn add_owners(&self, name: &str, logins: &[String]) -> Result<(), Error> {
         self.edit_owners(name, logins.iter(), |ids, entry| {
             entry.owner_ids_mut().extend(ids);
             entry.owner_ids_mut().sort_unstable();
@@ -168,7 +168,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, name, logins))]
-    pub async fn remove_owners(&self, name: &str, logins: &[String]) -> Result<(), Error> {
+    async fn remove_owners(&self, name: &str, logins: &[String]) -> Result<(), Error> {
         self.edit_owners(name, logins.iter(), |ids, entry| {
             entry.owner_ids_mut().retain(|i| !ids.contains(i));
         })
@@ -176,7 +176,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn last_user_id(&self) -> Result<Option<u32>, Error> {
+    async fn last_user_id(&self) -> Result<Option<u32>, Error> {
         let collection = self
             .client
             .database(&self.database_name)
@@ -207,7 +207,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, token))]
-    pub async fn user_id_for_token(&self, token: &str) -> Result<u32, Error> {
+    async fn user_id_for_token(&self, token: &str) -> Result<u32, Error> {
         let collection = self
             .client
             .database(&self.database_name)
@@ -223,7 +223,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, user_id, token))]
-    pub async fn set_token(&self, user_id: u32, token: &str) -> Result<(), Error> {
+    async fn set_token(&self, user_id: u32, token: &str) -> Result<(), Error> {
         let token = token.to_owned();
         let token_map = TokenMap { id: user_id, token };
         self.update_or_insert_one(TOKENS_KEY, doc! { "id": user_id }, token_map)
@@ -231,7 +231,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, name))]
-    pub async fn user_by_username(&self, name: &str) -> Result<User, Error> {
+    async fn user_by_username(&self, name: &str) -> Result<User, Error> {
         let name = name.to_owned();
         let login = format!("ktra-secure-auth:{}", name);
         let collection = self
@@ -250,7 +250,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, user, password))]
-    pub async fn add_new_user(&self, user: User, password: &str) -> Result<(), Error> {
+    async fn add_new_user(&self, user: User, password: &str) -> Result<(), Error> {
         let user_id = user.id;
         let users_collection = self
             .client
@@ -282,7 +282,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, user_id, password))]
-    pub async fn verify_password(&self, user_id: u32, password: &str) -> Result<bool, Error> {
+    async fn verify_password(&self, user_id: u32, password: &str) -> Result<bool, Error> {
         let collection = self
             .client
             .database(&self.database_name)
@@ -304,7 +304,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, user_id, old_password, new_password))]
-    pub async fn change_password(
+    async fn change_password(
         &self,
         user_id: u32,
         old_password: &str,
@@ -350,7 +350,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, user_id, name, version))]
-    pub async fn can_add_metadata(
+    async fn can_add_metadata(
         &self,
         user_id: u32,
         name: &str,
@@ -377,7 +377,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, owner_id, metadata))]
-    pub async fn add_new_metadata(&self, owner_id: u32, metadata: Metadata) -> Result<(), Error> {
+    async fn add_new_metadata(&self, owner_id: u32, metadata: Metadata) -> Result<(), Error> {
         let name = metadata.name.clone();
         let version = metadata.vers.clone();
         let mut entry = self.entry(&name).await?;
@@ -396,7 +396,7 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, user_id, name, version))]
-    pub async fn can_edit_package(
+    async fn can_edit_package(
         &self,
         user_id: u32,
         name: &str,
@@ -423,19 +423,19 @@ impl DbManager for MongoDbManager {
     }
 
     #[tracing::instrument(skip(self, name, version))]
-    pub async fn yank(&self, name: &str, version: Version) -> Result<(), Error> {
+    async fn yank(&self, name: &str, version: Version) -> Result<(), Error> {
         self.change_yanked(name, version, true, Error::AlreadyYanked)
             .await
     }
 
     #[tracing::instrument(skip(self, name, version))]
-    pub async fn unyank(&self, name: &str, version: Version) -> Result<(), Error> {
+    async fn unyank(&self, name: &str, version: Version) -> Result<(), Error> {
         self.change_yanked(name, version, false, Error::NotYetYanked)
             .await
     }
 
     #[tracing::instrument(skip(self, query))]
-    pub async fn search(&self, query: &Query) -> Result<Search, Error> {
+    async fn search(&self, query: &Query) -> Result<Search, Error> {
         let query_string = normalized_crate_name(&query.string);
         let collection = self
             .client

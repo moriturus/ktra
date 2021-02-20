@@ -32,14 +32,6 @@ jobs:
         username: ${{ github.repository_owner }}
         password: ${{ secrets.CR_PAT }}
     
-    - name: "`db-sled` build and push"
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        file: ./docker/ktra.Dockerfile
-        tags: ghcr.io/${{ github.repository_owner }}/ktra:${{ env.TAG }}
-        push: true
-    
     - name: "`db-redis` build and push"
       uses: docker/build-push-action@v2
       with:
@@ -60,4 +52,12 @@ jobs:
         no-cache: true
         build-args: |
           DB=db-mongo
+        push: true
+    
+    - name: "`db-sled` build and push"
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        file: ./docker/ktra.Dockerfile
+        tags: ghcr.io/${{ github.repository_owner }}/ktra:${{ env.TAG }}
         push: true
