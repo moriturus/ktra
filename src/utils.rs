@@ -18,9 +18,9 @@ pub fn always_true<T>(_: T) -> bool {
 }
 
 #[tracing::instrument(skip(path))]
-pub async fn file_exists(path: impl AsRef<Path>) -> bool {
+pub async fn file_exists_and_not_empty(path: impl AsRef<Path>) -> bool {
     tokio::fs::metadata(path)
-        .map_ok_or_else(|_| false, |_| true)
+        .map_ok_or_else(|_| false, |metadata| metadata.len() != 0)
         .await
 }
 
@@ -30,6 +30,7 @@ pub async fn random_alphanumeric_string(length: usize) -> Result<String, Error> 
         rand::thread_rng()
             .sample_iter(Alphanumeric)
             .take(length)
+            .map(char::from)
             .collect()
     })
     .map_err(Error::Join)

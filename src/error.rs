@@ -137,6 +137,9 @@ pub enum Error {
     #[cfg(feature = "crates-io-mirroring")]
     #[error("HTTP response building error: {}", _0)]
     HttpResponseBuilding(warp::http::Error),
+    #[cfg(feature = "crates-io-mirroring")]
+    #[error("Invalid HTTP response length")]
+    InvalidHttpResponseLength,
 }
 
 impl Error {

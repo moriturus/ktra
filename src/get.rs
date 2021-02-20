@@ -11,18 +11,16 @@ use semver::Version;
 use std::path::PathBuf;
 use std::sync::Arc;
 #[cfg(feature = "crates-io-mirroring")]
-use tokio::fs::{File, OpenOptions};
+use tokio::fs::OpenOptions;
 #[cfg(feature = "crates-io-mirroring")]
-use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufReader, BufWriter, SeekFrom};
-use tokio::sync::RwLock;
-#[cfg(feature = "crates-io-mirroring")]
-use tokio_util::io::ReaderStream;
+use tokio::io::{AsyncWriteExt, BufWriter};
+use tokio::{io::AsyncReadExt, sync::RwLock};
 #[cfg(feature = "crates-io-mirroring")]
 use url::Url;
 #[cfg(feature = "crates-io-mirroring")]
 use warp::http::Response;
 #[cfg(feature = "crates-io-mirroring")]
-use warp::hyper::Body;
+use warp::hyper::body::Bytes;
 use warp::{filters::BoxedFilter, Filter, Rejection, Reply};
 
 #[cfg(not(feature = "crates-io-mirroring"))]
@@ -77,19 +75,24 @@ async fn cache_crate_file(
     cache_dir_path: Arc<PathBuf>,
     crate_name: impl AsRef<str>,
     version: Version,
-) -> Result<File, Rejection> {
+) -> Result<Bytes, Rejection> {
     let computation = async move {
         let mut cache_dir_path = cache_dir_path.as_ref().to_path_buf();
         let crate_components = format!("{}/{}/download", crate_name.as_ref(), version);
         cache_dir_path.push(&crate_components);
         let cache_file_path = cache_dir_path;
 
-        if file_exists(&cache_file_path).await {
+        if file_exists_and_not_empty(&cache_file_path).await {
             OpenOptions::new()
                 .write(false)
                 .create(false)
                 .read(true)
                 .open(cache_file_path)
+                .and_then(|mut file| async move {
+                    let mut buffer = Vec::new();
+                    file.read_to_end(&mut buffer).await?;
+                    Ok(Bytes::from(buffer))
+                })
                 .map_err(Error::Io)
                 .await
         } else {
@@ -108,7 +111,7 @@ async fn cache_crate_file(
                 .open(&cache_file_path)
                 .map_err(Error::Io)
                 .await?;
-            let mut file = BufWriter::new(file);
+            let mut file = BufWriter::with_capacity(128 * 1024, file);
 
             let crates_io_base_url =
                 Url::parse("https://crates.io/api/v1/crates/").map_err(Error::UrlParsing)?;
@@ -118,17 +121,19 @@ async fn cache_crate_file(
             let body = http_client
                 .get(crate_file_url)
                 .send()
+                .and_then(|res| async move { res.error_for_status() })
                 .and_then(|res| res.bytes())
                 .map_err(Error::HttpRequest)
                 .await?;
 
+            if body.is_empty() {
+                return Err(Error::InvalidHttpResponseLength);
+            }
+
             file.write_all(&body).map_err(Error::Io).await?;
             file.flush().map_err(Error::Io).await?;
 
-            let mut file = file.into_inner();
-            file.seek(SeekFrom::Start(0)).map_err(Error::Io).await?;
-
-            Ok(file)
+            Ok(body)
         }
     };
 
@@ -152,14 +157,11 @@ fn download_crates_io(
 }
 
 #[cfg(feature = "crates-io-mirroring")]
-#[tracing::instrument(skip(cache_file))]
-async fn handle_download_crates_io(cache_file: File) -> Result<impl Reply, Rejection> {
-    let file = BufReader::new(cache_file);
-    let stream = ReaderStream::new(file);
-    let body = Body::wrap_stream(stream);
+#[tracing::instrument(skip(crate_file_data))]
+async fn handle_download_crates_io(crate_file_data: Bytes) -> Result<impl Reply, Rejection> {
     let response = Response::builder()
         .header("Content-Type", "application/x-tar")
-        .body(body)
+        .body(crate_file_data)
         .map_err(Error::HttpResponseBuilding)?;
 
     Ok(response)

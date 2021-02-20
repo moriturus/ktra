@@ -133,6 +133,7 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     let index_manager = IndexManager::new(config.index_config).await?;
     index_manager.pull().await?;
 
+    #[cfg(feature = "crates-io-mirroring")]
     let http_client = Client::builder().build()?;
 
     let routes = apis(
