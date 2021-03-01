@@ -181,16 +181,7 @@ fn credentials_callback<'a>(
     config: &'a IndexConfig,
 ) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, git2::Error> + 'a {
     move |_url, username, credential_type| {
-        if credential_type.contains(CredentialType::USER_PASS_PLAINTEXT) {
-            let username = username
-                .or_else(|| config.https_username.as_deref())
-                .ok_or_else(|| git2::Error::from_str("username not defined"))?;
-            let password = config
-                .https_password
-                .clone()
-                .ok_or_else(|| git2::Error::from_str("password not defined"))?;
-            Cred::userpass_plaintext(username, &password)
-        } else {
+        if credential_type.contains(CredentialType::SSH_KEY) && config.ssh_privkey_path.is_some() {
             let username = username
                 .or_else(|| config.ssh_username.as_deref())
                 .ok_or_else(|| git2::Error::from_str("username not defined"))?;
@@ -201,6 +192,17 @@ fn credentials_callback<'a>(
                 .ok_or_else(|| git2::Error::from_str("ssh private key not specified"))?;
             let passphrase = config.ssh_key_passphrase.as_deref();
             Cred::ssh_key(username, pubkey_path, privkey_path, passphrase)
+        } else if credential_type.contains(CredentialType::USER_PASS_PLAINTEXT) {
+            let username = username
+                .or_else(|| config.https_username.as_deref())
+                .ok_or_else(|| git2::Error::from_str("username not defined"))?;
+            let password = config
+                .https_password
+                .clone()
+                .ok_or_else(|| git2::Error::from_str("password not defined"))?;
+            Cred::userpass_plaintext(username, &password)
+        } else {
+            Err(git2::Error::from_str("no supported credential type"))
         }
     }
 }
