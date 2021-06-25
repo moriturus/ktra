@@ -17,6 +17,7 @@ default = ["secure-auth", "db-sled", "crates-io-mirroring"]
 secure-auth = ["rand", "rust-argon2"]
 crates-io-mirroring = ["reqwest", "tokio-util"]
 mirroring-dummy = []
+openid = ["openidconnect", "reqwest"]
 db-sled = ["sled"]
 db-redis = ["redis"]
 db-mongo = ["mongodb", "bson"]
@@ -41,7 +42,7 @@ toml = "0.5"
 clap = "2.33"
 async-trait = "0.1"
 
-reqwest = { version = "0.11", features = ["gzip", "brotli"], optional = true }
+reqwest = { version = "0.11", features = ["gzip", "brotli", "json"], optional = true }
 tokio-util = { version = "0.6", features = ["io"], optional = true }
 
 rand = { version = "0.8", optional = true }
@@ -52,3 +53,4 @@ redis = { version = "0.19", features = ["tokio-comp"], optional = true }
 mongodb = { version = "1.1", optional = true }
 bson = { version = "1.1", features = ["u2i"], optional = true }
 
+openidconnect = { version = "2.1.1", optional = true }

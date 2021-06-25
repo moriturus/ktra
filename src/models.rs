@@ -302,3 +302,23 @@ pub struct ChangePassword {
     pub old_password: String,
     pub new_password: String,
 }
+
+#[cfg(feature = "openid")]
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeQuery {
+    pub code: String,
+    pub state: Option<String>,
+}
+
+/// The additional claims OpenId providers may send
+///
+/// All fields here are options so that the extra claims are caught when presents
+#[cfg(feature = "openid")]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Claims {
+    pub(crate) sub: Option<String>,
+    pub(crate) sub_legacy: Option<String>,
+    // Gitlab claims return the groups a user is in.
+    // This property is used when gitlab_authorized_groups is set in the configuration
+    pub(crate) groups: Option<Vec<String>>,
+}

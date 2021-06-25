@@ -27,6 +27,7 @@ const ENTRIES_KEY: &str = "__ENTRIES__";
 const USERS_KEY: &str = "__USERS__";
 const PASSWORDS_KEY: &str = "__PASSWORDS__";
 const TOKENS_KEY: &str = "__TOKENS__";
+const OAUTH_NONCES_KEY: &str = "__OAUTH_NONCES__";
 
 #[derive(Clone, SerializeTrait, DeserializeTrait)]
 struct TokenMap {
@@ -228,6 +229,44 @@ impl DbManager for MongoDbManager {
             .ok_or_else(|| Error::InvalidToken(token.to_owned()))
     }
 
+    #[tracing::instrument(skip(self, login))]
+    async fn token_by_login(&self, login: &str) -> Result<Option<String>, Error> {
+        match self.user_by_login(login).await {
+            Ok(user) => {
+                let collection = self
+                    .client
+                    .database(&self.database_name)
+                    .collection(TOKENS_KEY);
+                Ok(collection
+                    .find_one(doc! { "id": user.id }, None)
+                    .map_err(Error::Db)
+                    .await?
+                    .and_then(|d| d.get("token").cloned())
+                    .and_then(|b| b.as_str().map(ToString::to_string)))
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    #[tracing::instrument(skip(self, name))]
+    async fn token_by_username(&self, name: &str) -> Result<Option<String>, Error> {
+        match self.user_by_username(name).await {
+            Ok(user) => {
+                let collection = self
+                    .client
+                    .database(&self.database_name)
+                    .collection(TOKENS_KEY);
+                Ok(collection
+                    .find_one(doc! { "id": user.id }, None)
+                    .map_err(Error::Db)
+                    .await?
+                    .and_then(|d| d.get("token").cloned())
+                    .and_then(|b| b.as_str().map(ToString::to_string)))
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
     #[tracing::instrument(skip(self, user_id, token))]
     async fn set_token(&self, user_id: u32, token: &str) -> Result<(), Error> {
         let token = token.to_owned();
@@ -240,19 +279,27 @@ impl DbManager for MongoDbManager {
     async fn user_by_username(&self, name: &str) -> Result<User, Error> {
         let name = name.to_owned();
         let login = format!("{}{}", self.login_prefix, name);
+        self.user_by_login(&login)
+            .await
+            .map_err(|_| Error::InvalidUsername(name.to_string()))
+    }
+
+    #[tracing::instrument(skip(self, login))]
+    async fn user_by_login(&self, login: &str) -> Result<User, Error> {
+        let login = login.to_owned();
         let collection = self
             .client
             .database(&self.database_name)
             .collection(USERS_KEY);
 
         collection
-            .find_one(doc! { "login": login }, None)
+            .find_one(doc! { "login": login.clone() }, None)
             .map_err(Error::Db)
             .await?
             .map(from_document::<User>)
             .transpose()
             .map_err(Error::BsonDeserialization)?
-            .ok_or_else(|| Error::InvalidUsername(name))
+            .ok_or_else(|| Error::InvalidLogin(login))
     }
 
     #[tracing::instrument(skip(self, user, password))]
@@ -491,6 +538,42 @@ impl DbManager for MongoDbManager {
         } else {
             Err(Error::multiple(errors))
         }
+    }
+
+    #[cfg(feature = "openid")]
+    async fn store_nonce_by_csrf(
+        &self,
+        state: openidconnect::CsrfToken,
+        nonce: openidconnect::Nonce,
+    ) -> Result<(), Error> {
+        let collection = self
+            .client
+            .database(&self.database_name)
+            .collection(OAUTH_NONCES_KEY);
+        let nonces_query_document = doc! {"state": state.secret().to_string() };
+
+        self.update_or_insert_one(OAUTH_NONCES_KEY, nonces_query_document, nonce)
+            .await
+    }
+
+    #[cfg(feature = "openid")]
+    async fn get_nonce_by_csrf(
+        &self,
+        state: openidconnect::CsrfToken,
+    ) -> Result<openidconnect::Nonce, Error> {
+        let collection = self
+            .client
+            .database(&self.database_name)
+            .collection(OAUTH_NONCES_KEY);
+
+        collection
+            .find_one(doc! { "state": state.secret().to_string() }, None)
+            .map_err(Error::Db)
+            .await?
+            .map(from_document::<openidconnect::Nonce>)
+            .transpose()
+            .map_err(Error::BsonDeserialization)?
+            .ok_or_else(|| Error::InvalidCsrfToken(state.secret().to_string()))
     }
 }
 

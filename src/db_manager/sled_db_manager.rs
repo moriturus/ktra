@@ -22,6 +22,7 @@ const SCHEMA_VERSION: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 3];
 const USERS_KEY: &str = "__USERS__";
 const PASSWORDS_KEY: &str = "__PASSWORDS__";
 const TOKENS_KEY: &str = "__TOKENS__";
+const OAUTH_NONCES_KEY: &str = "__OAUTH_NONCES__";
 
 const OLD_TOKENS_KEY: &str = "tokens";
 
@@ -132,6 +133,38 @@ impl DbManager for SledDbManager {
             .ok_or(Error::InvalidToken(token))
     }
 
+    #[tracing::instrument(skip(self, login))]
+    async fn token_by_login(&self, login: &str) -> Result<Option<String>, Error> {
+        match self.user_by_login(login).await {
+            Ok(user) => Ok(self.deserialize(TOKENS_KEY)?.and_then(|map: TokenMap| {
+                map.iter().find_map(|(k, v)| {
+                    if k == &user.id {
+                        Some(v.to_string())
+                    } else {
+                        None
+                    }
+                })
+            })),
+            Err(_) => Ok(None),
+        }
+    }
+
+    #[tracing::instrument(skip(self, name))]
+    async fn token_by_username(&self, name: &str) -> Result<Option<String>, Error> {
+        match self.user_by_username(name).await {
+            Ok(user) => Ok(self.deserialize(TOKENS_KEY)?.and_then(|map: TokenMap| {
+                map.iter().find_map(|(k, v)| {
+                    if k == &user.id {
+                        Some(v.to_string())
+                    } else {
+                        None
+                    }
+                })
+            })),
+            Err(_) => Ok(None),
+        }
+    }
+
     #[tracing::instrument(skip(self, user_id, token))]
     async fn set_token(&self, user_id: u32, token: &str) -> Result<(), Error> {
         let token = token.into();
@@ -141,17 +174,24 @@ impl DbManager for SledDbManager {
         self.insert(TOKENS_KEY, tokens).await
     }
 
-    #[tracing::instrument(skip(self, name))]
-    async fn user_by_username(&self, name: &str) -> Result<User, Error> {
-        let name = name.into();
-        let login = format!("{}{}", self.login_prefix, name);
+    #[tracing::instrument(skip(self, login))]
+    async fn user_by_login(&self, login: &str) -> Result<User, Error> {
+        let login = login.into();
         let mut users: Vec<User> = self.deserialize(USERS_KEY)?.unwrap_or_default();
 
         users.sort_by_key(|u| u.login.clone());
         let index = users
             .binary_search_by_key(&login, |u| u.login.clone())
-            .map_err(|_| Error::InvalidUsername(name))?;
+            .map_err(|_| Error::InvalidLogin(login))?;
         Ok(users.remove(index))
+    }
+
+    #[tracing::instrument(skip(self, name))]
+    async fn user_by_username(&self, name: &str) -> Result<User, Error> {
+        let login = format!("{}{}", self.login_prefix, name);
+        self.user_by_login(&login)
+            .await
+            .map_err(|_| Error::InvalidUsername(name.to_string()))
     }
 
     #[tracing::instrument(skip(self, user, password))]
@@ -363,6 +403,33 @@ impl DbManager for SledDbManager {
         } else {
             Err(Error::multiple(errors))
         }
+    }
+
+    #[cfg(feature = "openid")]
+    async fn store_nonce_by_csrf(
+        &self,
+        state: openidconnect::CsrfToken,
+        nonce: openidconnect::Nonce,
+    ) -> Result<(), Error> {
+        let mut nonces: HashMap<String, openidconnect::Nonce> =
+            self.deserialize(OAUTH_NONCES_KEY)?.unwrap_or_default();
+        // TODO: check if nonces already contains state.secret()
+        nonces.insert(state.secret().to_string(), nonce);
+        self.insert(OAUTH_NONCES_KEY, nonces).await
+    }
+
+    #[cfg(feature = "openid")]
+    async fn get_nonce_by_csrf(
+        &self,
+        state: openidconnect::CsrfToken,
+    ) -> Result<openidconnect::Nonce, Error> {
+        let mut nonces: HashMap<String, openidconnect::Nonce> =
+            self.deserialize(OAUTH_NONCES_KEY)?.unwrap_or_default();
+        let ret = nonces
+            .remove(state.secret())
+            .ok_or_else(|| Error::InvalidCsrfToken(state.secret().to_string()))?;
+        self.insert(OAUTH_NONCES_KEY, nonces).await?;
+        Ok(ret)
     }
 }
 
