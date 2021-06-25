@@ -61,3 +61,33 @@ jobs:
         file: ./docker/ktra.Dockerfile
         tags: ghcr.io/${{ github.repository_owner }}/ktra:${{ env.TAG }}
         push: true
+
+    - name: "`db-redis + openid` build and push"
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        file: ./docker/ktra_openid.Dockerfile
+        tags: ghcr.io/${{ github.repository_owner }}/ktra:db-redis-openid-${{ env.TAG }}
+        no-cache: true
+        build-args: |
+          DB=db-redis
+        push: true
+
+    - name: "`db-mongo + openid` build and push"
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        file: ./docker/ktra_openid.Dockerfile
+        tags: ghcr.io/${{ github.repository_owner }}/ktra:db-mongo-openid-${{ env.TAG }}
+        no-cache: true
+        build-args: |
+          DB=db-mongo
+        push: true
+
+    - name: "`db-sled + openid` build and push"
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        file: ./docker/ktra_openid.Dockerfile
+        tags: ghcr.io/${{ github.repository_owner }}/ktra:openid-${{ env.TAG }}
+        push: true

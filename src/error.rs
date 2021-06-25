@@ -43,6 +43,8 @@ pub enum Error {
         any(feature = "db-mongo", feature = "crates-io-mirroring"),
         not(all(feature = "db-sled", feature = "db-redis"))
     ))]
+    #[error("Openid error: {}", _0)]
+    OpenId(String),
     #[error("URL parsing error: {}", _0)]
     UrlParsing(url::ParseError),
     #[error("the given passwords are the same")]
@@ -83,10 +85,14 @@ pub enum Error {
     InvalidCrateName(String),
     #[error("invalid token: {}", _0)]
     InvalidToken(String),
+    #[error("invalid csrf state: {}", _0)]
+    InvalidCsrfToken(String),
     #[error("invalid user id: {}", _0)]
     InvalidUser(u32),
     #[error("invalid username: {}", _0)]
     InvalidUsername(String),
+    #[error("invalid login: {}", _0)]
+    InvalidLogin(String),
     #[error("invalid password")]
     InvalidPassword,
     #[error("one or more invalid login names are detected: {:?}", _0)]

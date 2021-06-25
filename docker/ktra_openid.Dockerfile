@@ -15,7 +15,7 @@ COPY --chown=rust:rust ./src /build/src
 COPY --chown=rust:rust ./Cargo.toml /build/
 WORKDIR /build
 
-RUN cargo build --release --no-default-features --features=secure-auth,${DB},${MIRRORING}
+RUN cargo build --release --no-default-features --features=secure-auth,openid,${DB},${MIRRORING}
 
 FROM debian:bullseye-slim
 

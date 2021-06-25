@@ -158,6 +158,18 @@ impl ServerConfig {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct OpenIdConfig {
+    pub(crate) issuer_url: String,
+    pub(crate) redirect_url: String,
+    pub(crate) client_id: String,
+    pub(crate) client_secret: String,
+    #[serde(default)]
+    pub(crate) additional_scopes: Vec<String>,
+    pub(crate) gitlab_authorized_groups: Option<Vec<String>>,
+    pub(crate) gitlab_authorized_users: Option<Vec<String>>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     #[serde(default)]
@@ -168,6 +180,8 @@ pub struct Config {
     pub index_config: IndexConfig,
     #[serde(default)]
     pub server_config: ServerConfig,
+    #[serde(default)]
+    pub openid_config: OpenIdConfig,
 }
 
 impl Default for Config {
@@ -177,6 +191,7 @@ impl Default for Config {
             db_config: Default::default(),
             index_config: Config::index_config_default(),
             server_config: Default::default(),
+            openid_config: Default::default(),
         }
     }
 }

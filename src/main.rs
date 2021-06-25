@@ -7,11 +7,14 @@ mod error;
 mod get;
 mod index_manager;
 mod models;
+mod openid;
 mod post;
 mod put;
 mod utils;
 
 use crate::config::Config;
+#[cfg(feature = "openid")]
+use crate::config::OpenIdConfig;
 use crate::index_manager::IndexManager;
 use clap::{clap_app, crate_authors, crate_version, ArgMatches};
 use db_manager::DbManager;
@@ -39,7 +42,37 @@ use db_manager::RedisDbManager;
 ))]
 use db_manager::SledDbManager;
 
-#[cfg(feature = "crates-io-mirroring")]
+#[cfg(all(feature = "crates-io-mirroring", feature = "openid"))]
+#[tracing::instrument(skip(
+    db_manager,
+    index_manager,
+    dl_dir_path,
+    http_client,
+    cache_dir_path,
+    dl_path
+))]
+fn apis(
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
+    dl_dir_path: Arc<PathBuf>,
+    http_client: Client,
+    cache_dir_path: Arc<PathBuf>,
+    dl_path: Vec<String>,
+    openid_config: Arc<OpenIdConfig>,
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    get::apis(
+        db_manager.clone(),
+        dl_dir_path.clone(),
+        http_client,
+        cache_dir_path,
+        dl_path,
+    )
+    .or(delete::apis(db_manager.clone(), index_manager.clone()))
+    .or(put::apis(db_manager.clone(), index_manager, dl_dir_path))
+    .or(openid::apis(db_manager, openid_config))
+}
+
+#[cfg(all(feature = "crates-io-mirroring", not(feature = "openid")))]
 #[tracing::instrument(skip(
     db_manager,
     index_manager,
@@ -68,7 +101,22 @@ fn apis(
     .or(put::apis(db_manager, index_manager, dl_dir_path))
 }
 
-#[cfg(not(feature = "crates-io-mirroring"))]
+#[cfg(all(not(feature = "crates-io-mirroring"), feature = "openid"))]
+#[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
+fn apis(
+    db_manager: Arc<RwLock<impl DbManager>>,
+    index_manager: Arc<IndexManager>,
+    dl_dir_path: Arc<PathBuf>,
+    dl_path: Vec<String>,
+    openid_config: Arc<OpenIdConfig>,
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
+        .or(delete::apis(db_manager.clone(), index_manager.clone()))
+        .or(put::apis(db_manager.clone()))
+        .or(openid::apis(db_manager, openid_config))
+}
+
+#[cfg(all(not(feature = "crates-io-mirroring"), not(feature = "openid")))]
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
 fn apis(
     db_manager: Arc<RwLock<impl DbManager>>,
@@ -79,7 +127,7 @@ fn apis(
     get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
         .or(delete::apis(db_manager.clone(), index_manager.clone()))
         .or(post::apis(db_manager.clone()))
-        .or(put::apis(db_manager, index_manager, dl_dir_path))
+        .or(put::apis(db_manager))
 }
 
 #[tracing::instrument(skip(rejection))]
@@ -145,6 +193,8 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
         #[cfg(feature = "crates-io-mirroring")]
         Arc::new(cache_dir_path),
         dl_path,
+        #[cfg(feature = "openid")]
+        Arc::new(config.openid_config.clone()),
     )
     .with(warp::trace::request())
     .recover(handle_rejection);
@@ -191,7 +241,13 @@ fn matches() -> ArgMatches<'static> {
         (@arg GIT_NAME: --("git-name") +takes_value "Sets an author and committer name")
         (@arg GIT_EMAIL: --("git-email") +takes_value "Sets an author and committer email address")
         (@arg ADDRESS: --("address") +takes_value "Sets an address HTTP server runs on")
-        (@arg PORT: --("port") +takes_value "Sets a port number HTTP server listens")
+        (@arg OPENID_ISSUER: --("openid-issuer") +takes_value "Sets the URL of the OpenId Connect issuer. Must be discoverable (GET /.well-known/openid-configuration answers)")
+        (@arg OPENID_REDIRECT: --("openid-redirect") +takes_value "Sets the redirect url of the OpenId process. Must be the same as the 'api' field in the registry's config.json")
+        (@arg OPENID_APP_ID: --("openid-client-id") +takes_value "Sets the client ID for OpenId")
+        (@arg OPENID_APP_SECRET: --("openid-client-secret") +takes_value "Sets the client secret for OpenId")
+        (@arg OPENID_ADD_SCOPES: --("openid-additional-scopes") +takes_value "Sets the additional scopes queried by the application for OpenId. Usually this value depends on the issuer.")
+        (@arg OPENID_GITLAB_GROUPS: --("openid-gitlab-groups") +takes_value "Sets the authorized Gitlab groups whose members are allowed to create an account on the registry and be publishers/owners. Leave empty not to check groups.")
+        (@arg OPENID_GITLAB_USERS: --("openid-gitlab-users") +takes_value "Sets the authorized Gitlab users who are allowed to create an account on the registry and be publishers/owners. Leave empty not to check users.")
     )
     .get_matches()
 }
@@ -297,6 +353,44 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(port) = matches.value_of("PORT").map(|s| s.parse().unwrap()) {
         config.server_config.port = port;
+    }
+
+    #[cfg(feature = "openid")]
+    if let Some(issuer) = matches.value_of("OPENID_ISSUER").map(ToOwned::to_owned) {
+        config.openid_config.issuer_url = issuer;
+    }
+
+    #[cfg(feature = "openid")]
+    if let Some(redirect) = matches.value_of("OPENID_REDIRECT").map(ToOwned::to_owned) {
+        config.openid_config.redirect_url = redirect;
+    }
+
+    #[cfg(feature = "openid")]
+    if let Some(client_id) = matches.value_of("OPENID_APP_ID").map(ToOwned::to_owned) {
+        config.openid_config.client_id = client_id;
+    }
+
+    #[cfg(feature = "openid")]
+    if let Some(client_secret) = matches.value_of("OPENID_APP_SECRET").map(ToOwned::to_owned) {
+        config.openid_config.client_secret = client_secret;
+    }
+
+    #[cfg(feature = "openid")]
+    if let Some(scopes) = matches.value_of("OPENID_ADD_SCOPES").map(ToOwned::to_owned) {
+        config.openid_config.additional_scopes =
+            scopes.split(',').map(ToString::to_string).collect();
+    }
+
+    #[cfg(feature = "openid")]
+    if let Some(gitlab_groups) = matches.value_of("OPENID_GITLAB_GROUPS") {
+        config.openid_config.gitlab_authorized_groups =
+            Some(gitlab_groups.split(',').map(ToString::to_string).collect());
+    }
+
+    #[cfg(feature = "openid")]
+    if let Some(gitlab_users) = matches.value_of("OPENID_GITLAB_USERS") {
+        config.openid_config.gitlab_authorized_users =
+            Some(gitlab_users.split(',').map(ToString::to_string).collect());
     }
 
     run_server(config).await

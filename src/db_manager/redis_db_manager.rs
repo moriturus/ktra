@@ -23,6 +23,7 @@ const ENTRIES_KEY: &str = "ktra:__ENTRIES__";
 const USERS_KEY: &str = "ktra:__USERS__";
 const PASSWORDS_KEY: &str = "ktra:__PASSWORDS__";
 const TOKENS_KEY: &str = "ktra:__TOKENS__";
+const OAUTH_NONCES_KEY: &str = "ktra:__OAUTH_NONCES__";
 
 pub struct RedisDbManager {
     client: Client,
@@ -130,6 +131,44 @@ impl DbManager for RedisDbManager {
             .ok_or_else(|| Error::InvalidToken(token))
     }
 
+    #[tracing::instrument(skip(self, login))]
+    async fn token_by_login(&self, login: &str) -> Result<Option<String>, Error> {
+        match self.user_by_login(login).await {
+            Ok(user) => Ok(self
+                .deserialize(TOKENS_KEY)
+                .await?
+                .and_then(|map: TokenMap| {
+                    map.iter().find_map(|(k, v)| {
+                        if k == &user.id {
+                            Some(v.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                })),
+            Err(_) => Ok(None),
+        }
+    }
+
+    #[tracing::instrument(skip(self, name))]
+    async fn token_by_username(&self, name: &str) -> Result<Option<String>, Error> {
+        match self.user_by_username(name).await {
+            Ok(user) => Ok(self
+                .deserialize(TOKENS_KEY)
+                .await?
+                .and_then(|map: TokenMap| {
+                    map.iter().find_map(|(k, v)| {
+                        if k == &user.id {
+                            Some(v.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                })),
+            Err(_) => Ok(None),
+        }
+    }
+
     #[tracing::instrument(skip(self, user_id, token))]
     async fn set_token(&self, user_id: u32, token: &str) -> Result<(), Error> {
         let token = token.into();
@@ -141,14 +180,21 @@ impl DbManager for RedisDbManager {
 
     #[tracing::instrument(skip(self, name))]
     async fn user_by_username(&self, name: &str) -> Result<User, Error> {
-        let name = name.into();
         let login = format!("{}{}", self.login_prefix, name);
+        self.user_by_login(&login)
+            .await
+            .map_err(|_| Error::InvalidUsername(name.to_string()))
+    }
+
+    #[tracing::instrument(skip(self, login))]
+    async fn user_by_login(&self, login: &str) -> Result<User, Error> {
+        let login = login.to_owned();
         let mut users: Vec<User> = self.deserialize(USERS_KEY).await?.unwrap_or_default();
 
         users.sort_by_key(|u| u.login.clone());
         let index = users
             .binary_search_by_key(&login, |u| u.login.clone())
-            .map_err(|_| Error::InvalidUsername(name))?;
+            .map_err(|_| Error::InvalidLogin(login))?;
         Ok(users.remove(index))
     }
 
@@ -352,6 +398,37 @@ impl DbManager for RedisDbManager {
             let errors: Vec<_> = errors.into_iter().map(|(_, result)| result).collect();
             Err(Error::multiple(errors))
         }
+    }
+
+    #[cfg(feature = "openid")]
+    async fn store_nonce_by_csrf(
+        &self,
+        state: openidconnect::CsrfToken,
+        nonce: openidconnect::Nonce,
+    ) -> Result<(), Error> {
+        let mut nonces: HashMap<String, openidconnect::Nonce> = self
+            .deserialize(OAUTH_NONCES_KEY)
+            .await?
+            .unwrap_or_default();
+        // TODO: check if nonces already contains state.secret()
+        nonces.insert(state.secret().to_string(), nonce);
+        self.insert(OAUTH_NONCES_KEY, nonces).await
+    }
+
+    #[cfg(feature = "openid")]
+    async fn get_nonce_by_csrf(
+        &self,
+        state: openidconnect::CsrfToken,
+    ) -> Result<openidconnect::Nonce, Error> {
+        let mut nonces: HashMap<String, openidconnect::Nonce> = self
+            .deserialize(OAUTH_NONCES_KEY)
+            .await?
+            .unwrap_or_default();
+        let ret = nonces
+            .remove(state.secret())
+            .ok_or_else(|| Error::InvalidCsrfToken(state.secret().to_string()))?;
+        self.insert(OAUTH_NONCES_KEY, nonces).await?;
+        Ok(ret)
     }
 }
 
