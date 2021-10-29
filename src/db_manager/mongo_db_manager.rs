@@ -49,6 +49,7 @@ struct EntryMap {
 pub struct MongoDbManager {
     client: Client,
     database_name: String,
+    login_prefix: String,
 }
 
 #[async_trait]
@@ -79,11 +80,16 @@ impl DbManager for MongoDbManager {
             let db_manager = MongoDbManager {
                 client,
                 database_name,
+                login_prefix: config.login_prefix.clone(),
             };
             Ok(db_manager)
         };
 
         initialization.map_err(Error::Db).await
+    }
+
+    async fn get_login_prefix(&self) -> Result<&str, Error> {
+        Ok(&self.login_prefix)
     }
 
     #[tracing::instrument(skip(self, user_id, name))]
@@ -233,7 +239,7 @@ impl DbManager for MongoDbManager {
     #[tracing::instrument(skip(self, name))]
     async fn user_by_username(&self, name: &str) -> Result<User, Error> {
         let name = name.to_owned();
-        let login = format!("ktra-secure-auth:{}", name);
+        let login = format!("{}{}", self.login_prefix, name);
         let collection = self
             .client
             .database(&self.database_name)
