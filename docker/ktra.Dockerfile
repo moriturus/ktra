@@ -8,6 +8,9 @@ RUN apt-get update &&\
     apt-get install -y openssl pkg-config libssl-dev
 
 RUN useradd -m rust
+RUN mkdir /build && chown rust:rust /build
+USER rust
+
 COPY --chown=rust:rust ./src /build/src
 COPY --chown=rust:rust ./Cargo.toml /build/
 WORKDIR /build
@@ -29,5 +32,8 @@ COPY LICENSE-MIT ./
 
 COPY --from=builder /build/target/release/ktra ./
 
+VOLUME /crates
+VOLUME /crates_io_crates
+EXPOSE 8000
 ENTRYPOINT [ "./ktra" ]
 CMD []
