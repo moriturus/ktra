@@ -175,6 +175,7 @@ fn matches() -> ArgMatches<'static> {
         (@arg DL_DIR_PATH: --("dl-dir-path") +takes_value "Sets the crate files directory")
         (@arg CACHE_DIR_PATH: --("cache-dir-path") +takes_value "Sets the crates.io cache files directory (needs `crates-io-mirroring` feature)")
         (@arg DL_PATH: --("dl-path") +takes_value ... "Sets a crate files download path")
+        (@arg LOGIN_PREFIX: --("login-prefix") +takes_value "Sets the prefix to registered users on the registry.")
         (@arg DB_DIR_PATH: --("db-dir-path") +takes_value "Sets a database directory (needs `db-sled` feature)")
         (@arg REDIS_URL: --("redis-url") + takes_value "Sets a Redis URL (needs `db-redis` feature)")
         (@arg MONGODB_URL: --("mongodb-url") + takes_value "Sets a MongoDB URL (needs `db-mongo` feature)")
@@ -218,6 +219,10 @@ async fn main() -> anyhow::Result<()> {
         .map(|vs| vs.map(ToOwned::to_owned).collect())
     {
         config.crate_files_config.dl_path = dl_path;
+    }
+
+    if let Some(login_prefix) = matches.value_of("LOGIN_PREFIX") {
+        config.db_config.login_prefix = login_prefix.into();
     }
 
     #[cfg(feature = "db-sled")]

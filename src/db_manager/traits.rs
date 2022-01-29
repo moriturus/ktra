@@ -7,6 +7,7 @@ use semver::Version;
 #[async_trait]
 pub trait DbManager: Send + Sync + Sized {
     async fn new(confg: &DbConfig) -> Result<Self, Error>;
+    async fn get_login_prefix(&self) -> Result<&str, Error>;
 
     async fn can_edit_owners(&self, user_id: u32, name: &str) -> Result<bool, Error>;
     async fn owners(&self, name: &str) -> Result<Vec<User>, Error>;
