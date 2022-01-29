@@ -57,26 +57,25 @@ impl IndexManager {
 
         tracing::debug!("try to open or create index file");
 
-        OpenOptions::new()
+        let mut file = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
             .open(package_path)
-            .and_then(|mut file| async move {
-                let mut buf = String::new();
-                file.read_to_string(&mut buf).await?;
-                let content = buf
-                    .lines()
-                    .chain(std::iter::once(package_json_string.as_str()))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                file.set_len(0).await?;
-                file.seek(SeekFrom::Start(0)).await?;
-                file.write_all(content.as_bytes()).await
-            })
-            .map_err(Error::Io)
             .await?;
+
+        let mut buf = String::new();
+        file.read_to_string(&mut buf).await?;
+        let content = buf
+            .lines()
+            .chain(std::iter::once(package_json_string.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        file.set_len(0).await?;
+        file.seek(SeekFrom::Start(0)).await?;
+        file.write_all(content.as_bytes()).await?;
+        file.flush().await?;
 
         let message = format!("Updating crate `{}#{}`", package.name, package.vers);
         let repository = self.repository.lock().await;
@@ -104,52 +103,48 @@ impl IndexManager {
         tracing::debug!("try to open index file");
 
         let version_cloned = version.clone();
-        OpenOptions::new()
+        let mut file = OpenOptions::new()
             .read(true)
             .write(true)
             .open(package_path)
-            .map_err(Error::Io)
-            .and_then(|mut file| async move {
-                let mut buf = String::new();
-                file.read_to_string(&mut buf).map_err(Error::Io).await?;
-                let (oks, errors): (Vec<_>, Vec<_>) = buf
-                    .lines()
-                    .map(|l| serde_json::from_str::<Package>(l).map_err(Error::InvalidJson))
-                    .partition(Result::is_ok);
-
-                if !errors.is_empty() {
-                    return Err(Error::multiple(errors));
-                }
-
-                let (oks, errors): (Vec<_>, Vec<_>) = oks
-                    .into_iter()
-                    .map(Result::unwrap)
-                    .map(|mut p| {
-                        if p.vers == version_cloned {
-                            p.yanked = yanked;
-                        }
-                        p.to_json_string().map_err(Error::InvalidJson)
-                    })
-                    .partition(Result::is_ok);
-
-                if !errors.is_empty() {
-                    return Err(Error::multiple(errors));
-                }
-
-                let content = oks
-                    .into_iter()
-                    .map(Result::unwrap)
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                let write_to_file = async {
-                    file.set_len(0).await?;
-                    file.seek(SeekFrom::Start(0)).await?;
-                    file.write_all(content.as_bytes()).await
-                };
-                write_to_file.map_err(Error::Io).await
-            })
             .await?;
+
+        let mut buf = String::new();
+        file.read_to_string(&mut buf).map_err(Error::Io).await?;
+        let (oks, errors): (Vec<_>, Vec<_>) = buf
+            .lines()
+            .map(|l| serde_json::from_str::<Package>(l).map_err(Error::InvalidJson))
+            .partition(Result::is_ok);
+
+        if !errors.is_empty() {
+            return Err(Error::multiple(errors));
+        }
+
+        let (oks, errors): (Vec<_>, Vec<_>) = oks
+            .into_iter()
+            .map(Result::unwrap)
+            .map(|mut p| {
+                if p.vers == version_cloned {
+                    p.yanked = yanked;
+                }
+                p.to_json_string().map_err(Error::InvalidJson)
+            })
+            .partition(Result::is_ok);
+
+        if !errors.is_empty() {
+            return Err(Error::multiple(errors));
+        }
+
+        let content = oks
+            .into_iter()
+            .map(Result::unwrap)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        file.set_len(0).await?;
+        file.seek(SeekFrom::Start(0)).await?;
+        file.write_all(content.as_bytes()).await?;
+        file.flush().await?;
 
         let message = if yanked {
             format!("Yanking crate `{}#{}`", name, version)
@@ -355,7 +350,7 @@ fn add_all(repository: &Repository) -> Result<(), git2::Error> {
     tracing::info!("add all unstaged files");
 
     let mut index = repository.index()?;
-    index.add_all(std::iter::once("*"), git2::IndexAddOption::DEFAULT, None)?;
+    index.add_all(std::iter::once("."), git2::IndexAddOption::DEFAULT, None)?;
     index.write()
 }
 
