@@ -75,7 +75,7 @@ impl IndexManager {
         file.set_len(0).await?;
         file.seek(SeekFrom::Start(0)).await?;
         file.write_all(content.as_bytes()).await?;
-        file.flush().await?;
+        file.sync_all().await?;
 
         let message = format!("Updating crate `{}#{}`", package.name, package.vers);
         let repository = self.repository.lock().await;
@@ -144,7 +144,7 @@ impl IndexManager {
         file.set_len(0).await?;
         file.seek(SeekFrom::Start(0)).await?;
         file.write_all(content.as_bytes()).await?;
-        file.flush().await?;
+        file.sync_all().await?;
 
         let message = if yanked {
             format!("Yanking crate `{}#{}`", name, version)
