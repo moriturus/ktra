@@ -1,7 +1,7 @@
 use semver::Version;
 use serde::Serialize;
-use thiserror::Error;
 use std::io;
+use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize)]
 struct ErrorMessage {
