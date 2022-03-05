@@ -5,14 +5,33 @@ use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MetadataDependency {
+    /// Name of the dependency.
+    /// If the dependency is renamed from the original package name,
+    /// this is the original name. The new package name is stored in
+    /// the `explicit_name_in_toml` field.
     pub name: String,
+    /// The semver requirement for this dependency.
     pub version_req: VersionReq,
+    /// Array of features (as strings) enabled for this dependency.
     pub features: Vec<String>,
+    /// Boolean of whether or not this is an optional dependency.
     pub optional: bool,
+    /// Boolean of whether or not default features are enabled.
     pub default_features: bool,
+    /// The target platform for the dependency.
+    /// null if not a target dependency.
+    /// Otherwise, a string such as "cfg(windows)".
     pub target: Option<String>,
+    /// The dependency kind.
+    /// "dev", "build", or "normal".
     pub kind: Option<String>,
+    /// The URL of the index of the registry where this dependency is
+    /// from as a string. If not specified or null, it is assumed the
+    /// dependency is in the current registry.
     pub registry: Option<Url>,
+    /// If the dependency is renamed, this is a string of the new
+    /// package name. If not specified or null, this dependency is not
+    /// renamed.
     pub explicit_name_in_toml: Option<String>,
 }
 
@@ -41,35 +60,84 @@ impl From<MetadataDependency> for Dependency {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Dependency {
+    /// Name of the dependency.
+    /// If the dependency is renamed from the original package name,
+    /// this is the new name. The original package name is stored in
+    /// the `package` field.
     pub name: String,
+    /// The SemVer requirement for this dependency.
+    /// This must be a valid version requirement defined at
+    /// https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html.
     pub req: VersionReq,
+    /// Array of features (as strings) enabled for this dependency.
     pub features: Vec<String>,
+    /// Boolean of whether or not this is an optional dependency.
     pub optional: bool,
+    /// Boolean of whether or not default features are enabled.
     pub default_features: bool,
+    /// The target platform for the dependency.
+    /// null if not a target dependency.
+    /// Otherwise, a string such as "cfg(windows)".
     pub target: Option<String>,
+    /// The dependency kind.
+    /// "dev", "build", or "normal".
+    /// Note: this is a required field, but a small number of entries
+    /// exist in the crates.io index with either a missing or null
+    /// `kind` field due to implementation bugs.
     pub kind: Option<String>,
+    /// The URL of the index of the registry where this dependency is
+    /// from as a string. If not specified or null, it is assumed the
+    /// dependency is in the current registry.
     pub registry: Option<Url>,
+    /// If the dependency is renamed, this is a string of the actual
+    /// package name. If not specified or null, this dependency is not
+    /// renamed.
     pub package: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Metadata {
+    /// The name of the package.
     pub name: String,
+    /// The version of the package being published.
     pub vers: Version,
+    /// Array of direct dependencies of the package.
     pub deps: Vec<MetadataDependency>,
+    /// Set of features defined for the package.
+    /// Each feature maps to an array of features or dependencies it enables.
+    /// Cargo does not impose limitations on feature names, but crates.io
+    /// requires alphanumeric ASCII, `_` or `-` characters.
     pub features: HashMap<String, Vec<String>>,
+    /// List of strings of the authors.
     pub authors: Vec<String>,
+    /// Description field from the manifest.
+    /// Note: crates.io requires at least some content.
     pub description: Option<String>,
+    /// String of the URL to the website for this package's documentation.
     pub documentation: Option<String>,
+    /// String of the URL to the website for this package's home page.
     pub homepage: Option<url::Url>,
+    /// String of the content of the README file.
     pub readme: Option<String>,
+    /// String of a relative path to a README file in the crate.
     pub readme_file: Option<String>,
+    /// Array of strings of keywords for the package.
     pub keywords: Vec<String>,
+    /// Array of strings of categories for the package.
     pub categories: Vec<String>,
+    /// String of the license for the package.
+    /// Note: crates.io requires either `license` or `license_file` to be set.
     pub license: Option<String>,
+    /// String of a relative path to a license file in the crate.
     pub license_file: Option<String>,
+    /// String of the URL to the website for the source repository of this package.
     pub repository: Option<url::Url>,
+    /// Optional object of "status" badges. Each value is an object of
+    /// arbitrary string to string mappings.
+    /// crates.io has special interpretation of the format of the badges.
     pub badges: HashMap<String, HashMap<String, String>>,
+    /// The `links` string value from the package's manifest, or None if not
+    /// specified.
     pub links: Option<String>,
     #[serde(default)]
     pub yanked: bool,
