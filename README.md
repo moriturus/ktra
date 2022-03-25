@@ -17,7 +17,7 @@ In other words, `Ktra` is an all-in-one package for the private cargo registry.
 docker pull ghcr.io/moriturus/ktra:latest
 ```
 
-All of the docker images are built with [emk/rust-musl-builder](https://github.com/emk/rust-musl-builder) image and stored at [GitHub Container Registry](https://docs.github.com/en/free-pro-team@latest/packages/getting-started-with-github-container-registry/about-github-container-registry).  
+All of the docker images are stored at [GitHub Container Registry](https://docs.github.com/en/free-pro-team@latest/packages/getting-started-with-github-container-registry/about-github-container-registry).  
 These are public images so you can pull them without any authentication.
 
 
