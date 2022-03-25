@@ -26,6 +26,7 @@ const TOKENS_KEY: &str = "ktra:__TOKENS__";
 
 pub struct RedisDbManager {
     client: Client,
+    login_prefix: String,
 }
 
 #[async_trait]
@@ -42,11 +43,18 @@ impl DbManager for RedisDbManager {
                 connection.set(SCHEMA_VERSION_KEY, &SCHEMA_VERSION).await?;
             }
 
-            let db_manager = RedisDbManager { client };
+            let db_manager = RedisDbManager {
+                client,
+                login_prefix: config.login_prefix.clone(),
+            };
             Ok(db_manager)
         };
 
         initialization.map_err(Error::Db).await
+    }
+
+    async fn get_login_prefix(&self) -> Result<&str, Error> {
+        Ok(&self.login_prefix)
     }
 
     #[tracing::instrument(skip(self, user_id, name))]
@@ -134,7 +142,7 @@ impl DbManager for RedisDbManager {
     #[tracing::instrument(skip(self, name))]
     async fn user_by_username(&self, name: &str) -> Result<User, Error> {
         let name = name.into();
-        let login = format!("ktra-secure-auth:{}", name);
+        let login = format!("{}{}", self.login_prefix, name);
         let mut users: Vec<User> = self.deserialize(USERS_KEY).await?.unwrap_or_default();
 
         users.sort_by_key(|u| u.login.clone());

@@ -76,6 +76,9 @@ impl CrateFilesConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DbConfig {
+    #[serde(default = "DbConfig::login_prefix_default")]
+    pub login_prefix: String,
+
     #[cfg(feature = "db-sled")]
     #[serde(default = "DbConfig::db_dir_path_default")]
     pub db_dir_path: PathBuf,
@@ -92,6 +95,7 @@ pub struct DbConfig {
 impl Default for DbConfig {
     fn default() -> DbConfig {
         DbConfig {
+            login_prefix: DbConfig::login_prefix_default(),
             #[cfg(feature = "db-sled")]
             db_dir_path: DbConfig::db_dir_path_default(),
             #[cfg(feature = "db-redis")]
@@ -103,6 +107,10 @@ impl Default for DbConfig {
 }
 
 impl DbConfig {
+    fn login_prefix_default() -> String {
+        "ktra-secure-auth:".to_owned()
+    }
+
     #[cfg(feature = "db-sled")]
     fn db_dir_path_default() -> PathBuf {
         PathBuf::from("db")

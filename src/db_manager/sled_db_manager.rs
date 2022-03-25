@@ -27,6 +27,7 @@ const OLD_TOKENS_KEY: &str = "tokens";
 
 pub struct SledDbManager {
     tree: Db,
+    login_prefix: String,
 }
 
 #[async_trait]
@@ -48,9 +49,16 @@ impl DbManager for SledDbManager {
             tree.flush_async().map_err(Error::Db).await?;
         }
 
-        let db_manager = SledDbManager { tree };
+        let db_manager = SledDbManager {
+            tree,
+            login_prefix: config.login_prefix.clone(),
+        };
 
         Ok(db_manager)
+    }
+
+    async fn get_login_prefix(&self) -> Result<&str, Error> {
+        Ok(&self.login_prefix)
     }
 
     #[tracing::instrument(skip(self, user_id, name))]
@@ -136,7 +144,7 @@ impl DbManager for SledDbManager {
     #[tracing::instrument(skip(self, name))]
     async fn user_by_username(&self, name: &str) -> Result<User, Error> {
         let name = name.into();
-        let login = format!("ktra-secure-auth:{}", name);
+        let login = format!("{}{}", self.login_prefix, name);
         let mut users: Vec<User> = self.deserialize(USERS_KEY)?.unwrap_or_default();
 
         users.sort_by_key(|u| u.login.clone());

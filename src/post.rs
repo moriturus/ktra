@@ -41,7 +41,7 @@ async fn handle_new_user(
         .map_ok(|user_id| user_id.map(|u| u + 1).unwrap_or(0))
         .map_err(warp::reject::custom)
         .await?;
-    let login_id = format!("ktra-secure-auth:{}", name);
+    let login_id = format!("{}{}", db_manager.get_login_prefix().await?, name);
     let user = User::new(user_id, login_id, Some(name));
 
     db_manager

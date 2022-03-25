@@ -1,5 +1,6 @@
 use semver::Version;
 use serde::Serialize;
+use std::io;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize)]
@@ -169,4 +170,10 @@ impl Error {
 
 impl warp::reject::Reject for Error {
     // nop
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Self::Io(e)
+    }
 }
