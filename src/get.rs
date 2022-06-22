@@ -30,10 +30,15 @@ pub fn apis(
     dl_dir_path: Arc<PathBuf>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    download(dl_dir_path, path)
+    let routes = download(dl_dir_path, path)
         .or(owners(db_manager.clone()))
         .or(me())
-        .or(search(db_manager))
+        .or(search(db_manager));
+
+    #[cfg(feature = "auth-required")]
+    let routes = authorization_header_filter(db_manager).and(routes);
+
+    routes
 }
 
 #[cfg(feature = "crates-io-mirroring")]
@@ -45,11 +50,16 @@ pub fn apis(
     cache_dir_path: Arc<PathBuf>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    download(dl_dir_path, path)
+    let routes = download(dl_dir_path, path)
         .or(download_crates_io(http_client, cache_dir_path))
         .or(owners(db_manager.clone()))
         .or(me())
-        .or(search(db_manager))
+        .or(search(db_manager.clone()));
+
+    #[cfg(feature = "auth-required")]
+    let routes = authorization_header_filter(db_manager).and(routes);
+
+    routes
 }
 
 #[tracing::instrument(skip(path))]

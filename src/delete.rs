@@ -3,8 +3,8 @@ use crate::error::Error;
 use crate::index_manager::IndexManager;
 use crate::models::Owners;
 use crate::utils::{
-    authorization_header, ok_json_message, ok_with_msg_json_message, with_db_manager,
-    with_index_manager,
+    ok_json_message, ok_with_msg_json_message, with_db_manager, with_index_manager,
+    with_user_id_from_authorization_header,
 };
 use futures::TryFutureExt;
 use semver::Version;
@@ -26,29 +26,24 @@ fn yank(
     index_manager: Arc<IndexManager>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::delete()
-        .and(with_db_manager(db_manager))
+        .and(with_db_manager(db_manager.clone()))
         .and(with_index_manager(index_manager))
-        .and(authorization_header())
+        .and(with_user_id_from_authorization_header(db_manager))
         .and(warp::path!(
             "api" / "v1" / "crates" / String / Version / "yank"
         ))
         .and_then(handle_yank)
 }
 
-#[tracing::instrument(skip(db_manager, index_manager, token, crate_name, version))]
+#[tracing::instrument(skip(db_manager, index_manager, user_id, crate_name, version))]
 async fn handle_yank(
     db_manager: Arc<RwLock<impl DbManager>>,
     index_manager: Arc<IndexManager>,
-    token: String,
+    user_id: u32,
     crate_name: String,
     version: Version,
 ) -> Result<impl Reply, Rejection> {
     let db_manager = db_manager.write().await;
-
-    let user_id = db_manager
-        .user_id_for_token(&token)
-        .map_err(warp::reject::custom)
-        .await?;
 
     let crate_name_cloned = crate_name.clone();
     db_manager
@@ -80,17 +75,17 @@ fn owners(
     db_manager: Arc<RwLock<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::delete()
-        .and(with_db_manager(db_manager))
-        .and(authorization_header())
+        .and(with_db_manager(db_manager.clone()))
+        .and(with_user_id_from_authorization_header(db_manager))
         .and(warp::path!("api" / "v1" / "crates" / String / "owners"))
         .and(warp::body::json::<Owners>())
         .and_then(handle_owners)
 }
 
-#[tracing::instrument(skip(db_manager, token, name, owners))]
+#[tracing::instrument(skip(db_manager, user_id, name, owners))]
 async fn handle_owners(
     db_manager: Arc<RwLock<impl DbManager>>,
-    token: String,
+    user_id: u32,
     name: String,
     owners: Owners,
 ) -> Result<impl Reply, Rejection> {
@@ -100,10 +95,6 @@ async fn handle_owners(
 
     let db_manager = db_manager.write().await;
 
-    let user_id = db_manager
-        .user_id_for_token(&token)
-        .map_err(warp::reject::custom)
-        .await?;
     db_manager
         .can_edit_owners(user_id, &name)
         .map_err(warp::reject::custom)

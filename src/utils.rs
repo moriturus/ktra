@@ -111,6 +111,50 @@ pub fn authorization_header() -> impl Filter<Extract = (String,), Error = Reject
     warp::header::<String>("Authorization")
 }
 
+#[tracing::instrument(skip(db_manager))]
+pub fn with_user_id_from_authorization_header(
+    db_manager: Arc<RwLock<impl DbManager>>,
+) -> impl Filter<Extract = (u32,), Error = Rejection> + Clone {
+    authorization_header()
+        .and(with_db_manager(db_manager))
+        .and_then(get_user_id_with_token)
+}
+
+#[tracing::instrument(skip(db_manager))]
+pub fn authorization_header_filter(
+    db_manager: Arc<RwLock<impl DbManager>>,
+) -> impl Filter<Extract = (), Error = Rejection> + Clone {
+    authorization_header()
+        .and(with_db_manager(db_manager))
+        .and_then(authorize_token)
+        .and(warp::any())
+        .untuple_one()
+}
+
+async fn authorize_token(
+    token: String,
+    db_manager: Arc<RwLock<impl DbManager>>,
+) -> Result<(), Rejection> {
+    let _user_id = db_manager
+        .read()
+        .await
+        .user_id_for_token(&token)
+        .map_err(|_| Error::InvalidToken(token.clone()))
+        .await?;
+    Ok(())
+}
+
+async fn get_user_id_with_token(
+    token: String,
+    db_manager: Arc<RwLock<impl DbManager>>,
+) -> Result<u32, Rejection> {
+    let lock = db_manager.read().await;
+    Ok(lock
+        .user_id_for_token(&token)
+        .map_err(|_| Error::InvalidToken(token.clone()))
+        .await?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::package_dir_path;
