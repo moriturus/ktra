@@ -20,6 +20,7 @@ mirroring-dummy = []
 db-sled = ["sled"]
 db-redis = ["redis"]
 db-mongo = ["mongodb", "bson"]
+sparse-index = []
 
 [dependencies]
 tokio = { version = "1.1", features = ["macros", "rt-multi-thread", "fs", "io-util"] }

@@ -158,6 +158,18 @@ impl ServerConfig {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub struct SparseIndexConfig {
+    pub(crate) path: String,
+}
+impl Default for SparseIndexConfig {
+    fn default() -> Self {
+        Self {
+            path: String::from("api/v1/crates"),
+        }
+    }
+}
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     #[serde(default)]
@@ -168,6 +180,8 @@ pub struct Config {
     pub index_config: IndexConfig,
     #[serde(default)]
     pub server_config: ServerConfig,
+    #[serde(default)]
+    pub sparse_index_config: SparseIndexConfig,
 }
 
 impl Default for Config {
@@ -177,6 +191,7 @@ impl Default for Config {
             db_config: Default::default(),
             index_config: Config::index_config_default(),
             server_config: Default::default(),
+            sparse_index_config: Default::default(),
         }
     }
 }
