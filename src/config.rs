@@ -158,6 +158,7 @@ impl ServerConfig {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct OpenIdConfig {
     pub(crate) issuer_url: String,

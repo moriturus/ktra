@@ -1,4 +1,5 @@
 #![cfg(feature = "openid")]
+
 use crate::config::OpenIdConfig;
 use crate::db_manager::DbManager;
 use crate::error::Error;
@@ -252,14 +253,22 @@ async fn get_openid_client(
     ))
 }
 
-#[tracing::instrument(skip(openid_config, id_token, userinfo))]
+#[tracing::instrument(skip(openid_config, _id_token, userinfo))]
 fn check_user_authorization<GC: openidconnect::GenderClaim>(
     openid_config: Arc<OpenIdConfig>,
-    id_token: &CoreIdTokenClaims,
+    _id_token: &CoreIdTokenClaims,
     userinfo: &UserInfoClaims<Claims, GC>,
 ) -> bool {
-    if openid_config.gitlab_authorized_users.is_none()
-        && openid_config.gitlab_authorized_groups.is_none()
+    if openid_config
+        .gitlab_authorized_users
+        .as_ref()
+        .map(Vec::is_empty)
+        .unwrap_or(true)
+        && openid_config
+            .gitlab_authorized_groups
+            .as_ref()
+            .map(Vec::is_empty)
+            .unwrap_or(true)
     {
         tracing::info!("no openid config authorization restrictions, authorizing.");
         return true;
