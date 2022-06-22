@@ -13,8 +13,6 @@ mod put;
 mod utils;
 
 use crate::config::Config;
-#[cfg(feature = "openid")]
-use crate::config::OpenIdConfig;
 use crate::index_manager::IndexManager;
 use clap::{clap_app, crate_authors, crate_version, ArgMatches};
 use db_manager::DbManager;
@@ -42,37 +40,7 @@ use db_manager::RedisDbManager;
 ))]
 use db_manager::SledDbManager;
 
-#[cfg(all(feature = "crates-io-mirroring", feature = "openid"))]
-#[tracing::instrument(skip(
-    db_manager,
-    index_manager,
-    dl_dir_path,
-    http_client,
-    cache_dir_path,
-    dl_path
-))]
-fn apis(
-    db_manager: Arc<RwLock<impl DbManager>>,
-    index_manager: Arc<IndexManager>,
-    dl_dir_path: Arc<PathBuf>,
-    http_client: Client,
-    cache_dir_path: Arc<PathBuf>,
-    dl_path: Vec<String>,
-    openid_config: Arc<OpenIdConfig>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    get::apis(
-        db_manager.clone(),
-        dl_dir_path.clone(),
-        http_client,
-        cache_dir_path,
-        dl_path,
-    )
-    .or(delete::apis(db_manager.clone(), index_manager.clone()))
-    .or(put::apis(db_manager.clone(), index_manager, dl_dir_path))
-    .or(openid::apis(db_manager, openid_config))
-}
-
-#[cfg(all(feature = "crates-io-mirroring", not(feature = "openid")))]
+#[cfg(feature = "crates-io-mirroring")]
 #[tracing::instrument(skip(
     db_manager,
     index_manager,
@@ -89,7 +57,7 @@ fn apis(
     cache_dir_path: Arc<PathBuf>,
     dl_path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    get::apis(
+    let routes = get::apis(
         db_manager.clone(),
         dl_dir_path.clone(),
         http_client,
@@ -97,26 +65,13 @@ fn apis(
         dl_path,
     )
     .or(delete::apis(db_manager.clone(), index_manager.clone()))
-    .or(post::apis(db_manager.clone()))
-    .or(put::apis(db_manager, index_manager, dl_dir_path))
+    .or(put::apis(db_manager.clone(), index_manager, dl_dir_path));
+    #[cfg(not(feature = "openid"))]
+    let routes = routes.or(post::apis(db_manager.clone()));
+    routes
 }
 
-#[cfg(all(not(feature = "crates-io-mirroring"), feature = "openid"))]
-#[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
-fn apis(
-    db_manager: Arc<RwLock<impl DbManager>>,
-    index_manager: Arc<IndexManager>,
-    dl_dir_path: Arc<PathBuf>,
-    dl_path: Vec<String>,
-    openid_config: Arc<OpenIdConfig>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
-        .or(delete::apis(db_manager.clone(), index_manager.clone()))
-        .or(put::apis(db_manager.clone()))
-        .or(openid::apis(db_manager, openid_config))
-}
-
-#[cfg(all(not(feature = "crates-io-mirroring"), not(feature = "openid")))]
+#[cfg(not(feature = "crates-io-mirroring"))]
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
 fn apis(
     db_manager: Arc<RwLock<impl DbManager>>,
@@ -124,10 +79,12 @@ fn apis(
     dl_dir_path: Arc<PathBuf>,
     dl_path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
+    let routes = get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
         .or(delete::apis(db_manager.clone(), index_manager.clone()))
-        .or(post::apis(db_manager.clone()))
-        .or(put::apis(db_manager))
+        .or(put::apis(db_manager, index_manager, dl_dir_path));
+    #[cfg(not(feature = "openid"))]
+    let routes = routes.or(post::apis(db_manager.clone()));
+    routes
 }
 
 #[tracing::instrument(skip(rejection))]
@@ -184,8 +141,9 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     #[cfg(feature = "crates-io-mirroring")]
     let http_client = Client::builder().build()?;
 
+    let db_manager = Arc::new(RwLock::new(db_manager));
     let routes = apis(
-        Arc::new(RwLock::new(db_manager)),
+        db_manager.clone(),
         Arc::new(index_manager),
         Arc::new(dl_dir_path),
         #[cfg(feature = "crates-io-mirroring")]
@@ -193,11 +151,17 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
         #[cfg(feature = "crates-io-mirroring")]
         Arc::new(cache_dir_path),
         dl_path,
-        #[cfg(feature = "openid")]
-        Arc::new(config.openid_config.clone()),
-    )
-    .with(warp::trace::request())
-    .recover(handle_rejection);
+    );
+
+    #[cfg(feature = "openid")]
+    let routes = routes.or(openid::apis(
+        db_manager.clone(),
+        Arc::new(config.openid_config),
+    ));
+
+    let routes = routes
+        .with(warp::trace::request())
+        .recover(handle_rejection);
 
     warp::serve(routes)
         .run(server_config.to_socket_addr())
@@ -249,7 +213,7 @@ fn matches() -> ArgMatches<'static> {
         (@arg OPENID_GITLAB_GROUPS: --("openid-gitlab-groups") +takes_value "Sets the authorized Gitlab groups whose members are allowed to create an account on the registry and be publishers/owners. Leave empty not to check groups.")
         (@arg OPENID_GITLAB_USERS: --("openid-gitlab-users") +takes_value "Sets the authorized Gitlab users who are allowed to create an account on the registry and be publishers/owners. Leave empty not to check users.")
     )
-    .get_matches()
+        .get_matches()
 }
 
 #[tokio::main]

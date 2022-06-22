@@ -23,33 +23,25 @@ use warp::http::Response;
 use warp::hyper::body::Bytes;
 use warp::{filters::BoxedFilter, Filter, Rejection, Reply};
 
-#[cfg(all(not(feature = "crates-io-mirroring"), feature = "openid"))]
+#[cfg(not(feature = "crates-io-mirroring"))]
 #[tracing::instrument(skip(db_manager, dl_dir_path, path))]
 pub fn apis(
     db_manager: Arc<RwLock<impl DbManager>>,
     dl_dir_path: Arc<PathBuf>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    let routes = download(dl_dir_path, path)
+        .or(owners(db_manager.clone()))
+        .or(search(db_manager));
+
     // With openid enabled, the `/me` route is handled in src/openid.rs
-    download(dl_dir_path, path)
-        .or(owners(db_manager.clone()))
-        .or(search(db_manager))
+    #[cfg(not(feature = "openid"))]
+    let routes = routes.or(me());
+
+    routes
 }
 
-#[cfg(all(not(feature = "crates-io-mirroring"), not(feature = "openid")))]
-#[tracing::instrument(skip(db_manager, dl_dir_path, path))]
-pub fn apis(
-    db_manager: Arc<RwLock<impl DbManager>>,
-    dl_dir_path: Arc<PathBuf>,
-    path: Vec<String>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    download(dl_dir_path, path)
-        .or(owners(db_manager.clone()))
-        .or(me())
-        .or(search(db_manager))
-}
-
-#[cfg(all(feature = "crates-io-mirroring", feature = "openid"))]
+#[cfg(feature = "crates-io-mirroring")]
 #[tracing::instrument(skip(db_manager, dl_dir_path, http_client, cache_dir_path, path))]
 pub fn apis(
     db_manager: Arc<RwLock<impl DbManager>>,
@@ -58,31 +50,18 @@ pub fn apis(
     cache_dir_path: Arc<PathBuf>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    let routes = download(dl_dir_path, path)
+        .or(download_crates_io(http_client, cache_dir_path))
+        .or(owners(db_manager.clone()))
+        .or(search(db_manager));
     // With openid enabled, the `/me` route is handled in src/openid.rs
-    download(dl_dir_path, path)
-        .or(download_crates_io(http_client, cache_dir_path))
-        .or(owners(db_manager.clone()))
-        .or(search(db_manager))
-}
-
-#[cfg(all(feature = "crates-io-mirroring", not(feature = "openid")))]
-#[tracing::instrument(skip(db_manager, dl_dir_path, http_client, cache_dir_path, path))]
-pub fn apis(
-    db_manager: Arc<RwLock<impl DbManager>>,
-    dl_dir_path: Arc<PathBuf>,
-    http_client: Client,
-    cache_dir_path: Arc<PathBuf>,
-    path: Vec<String>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    download(dl_dir_path, path)
-        .or(download_crates_io(http_client, cache_dir_path))
-        .or(owners(db_manager.clone()))
-        .or(me())
-        .or(search(db_manager))
+    #[cfg(not(feature = "openid"))]
+    let routes = routes.or(me());
+    routes
 }
 
 #[tracing::instrument(skip(path))]
-fn into_boxed_filters(path: Vec<String>) -> BoxedFilter<()> {
+pub(crate) fn into_boxed_filters(path: Vec<String>) -> BoxedFilter<()> {
     let (h, t) = path.split_at(1);
     t.iter().fold(warp::path(h[0].clone()).boxed(), |accm, s| {
         accm.and(warp::path(s.clone())).boxed()
