@@ -9,6 +9,7 @@ mod index_manager;
 mod models;
 mod post;
 mod put;
+mod sparse;
 mod utils;
 
 use crate::config::Config;
@@ -130,6 +131,8 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
         not(all(feature = "db-sled", feature = "db-redis"))
     ))]
     let db_manager = MongoDbManager::new(&config.db_config).await?;
+    #[cfg(feature = "sparse-index")]
+    let local_index_path = config.index_config.local_path.clone();
     let index_manager = IndexManager::new(config.index_config).await?;
     index_manager.pull().await?;
 
@@ -145,9 +148,14 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
         #[cfg(feature = "crates-io-mirroring")]
         Arc::new(cache_dir_path),
         dl_path,
-    )
-    .with(warp::trace::request())
-    .recover(handle_rejection);
+    );
+
+    #[cfg(feature = "sparse-index")]
+    let routes = routes.or(sparse::apis(config.sparse_index_config, local_index_path));
+
+    let routes = routes
+        .with(warp::trace::request())
+        .recover(handle_rejection);
 
     warp::serve(routes)
         .run(server_config.to_socket_addr())
@@ -192,6 +200,7 @@ fn matches() -> ArgMatches<'static> {
         (@arg GIT_EMAIL: --("git-email") +takes_value "Sets an author and committer email address")
         (@arg ADDRESS: --("address") +takes_value "Sets an address HTTP server runs on")
         (@arg PORT: --("port") +takes_value "Sets a port number HTTP server listens")
+        (@arg SPARSE_INDEX_PATH: --("sparse-index-path") +takes_value "Sets the path of sparse index service. Default to /api/v1/crates")
     )
     .get_matches()
 }
@@ -297,6 +306,11 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(port) = matches.value_of("PORT").map(|s| s.parse().unwrap()) {
         config.server_config.port = port;
+    }
+
+    #[cfg(feature = "sparse-index")]
+    if let Some(p) = matches.value_of("SPARSE_INDEX_PATH") {
+        config.sparse_index_config.path = p.to_string();
     }
 
     run_server(config).await

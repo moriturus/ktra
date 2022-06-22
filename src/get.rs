@@ -53,7 +53,7 @@ pub fn apis(
 }
 
 #[tracing::instrument(skip(path))]
-fn into_boxed_filters(path: Vec<String>) -> BoxedFilter<()> {
+pub(crate) fn into_boxed_filters(path: Vec<String>) -> BoxedFilter<()> {
     let (h, t) = path.split_at(1);
     t.iter().fold(warp::path(h[0].clone()).boxed(), |accm, s| {
         accm.and(warp::path(s.clone())).boxed()
