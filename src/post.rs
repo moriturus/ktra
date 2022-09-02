@@ -1,3 +1,6 @@
+#![cfg(not(feature = "openid"))]
+// The "POST" endpoints in this module are all concerning user and password management,
+// which are irrelevant with openid enabled
 use crate::db_manager::DbManager;
 use crate::error::Error;
 use crate::models::User;

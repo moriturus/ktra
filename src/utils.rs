@@ -1,3 +1,4 @@
+use crate::config::OpenIdConfig;
 use crate::db_manager::DbManager;
 use crate::error::Error;
 use crate::index_manager::IndexManager;
@@ -104,6 +105,13 @@ pub fn with_index_manager(
     index_manager: Arc<IndexManager>,
 ) -> impl Filter<Extract = (Arc<IndexManager>,), Error = Infallible> + Clone {
     warp::any().map(move || index_manager.clone())
+}
+
+#[tracing::instrument(skip(openid_config))]
+pub fn with_openid_config(
+    openid_config: Arc<OpenIdConfig>,
+) -> impl Filter<Extract = (Arc<OpenIdConfig>,), Error = Infallible> + Clone {
+    warp::any().map(move || openid_config.clone())
 }
 
 #[tracing::instrument]

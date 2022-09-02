@@ -25,20 +25,38 @@ Any commit on `develop` branch builds images listed below:
 
 - `latest`
     - `db-sled` featured image.
+- `openid-latest`
+    - `db-sled` featured image.
+    - `openid` support for authentication
 - `db-redis-latest`
     - `db-redis` featured image.
+- `db-redis-openid-latest`
+    - `db-redis` featured image.
+    - `openid` support for authentication
 - `db-mongo-latest`
     - `db-mongo` featured image.
+- `db-mongo-openid-latest`
+    - `db-mongo` featured image.
+    - `openid` support for authentication
 
 
 Similarly, images below are built automatically when tags are pushed:
 
 - `{VERSION}` *(e.g. `0.4.3`)*
     - `db-sled` featured image.
+- `openid-{VERSION}`
+    - `db-sled` featured image.
+    - `openid` support for authentication
 - `db-redis-{VERSION}`
     - `db-redis` featured image.
+- `db-redis-openid-{VERSION}`
+    - `db-redis` featured image.
+    - `openid` support for authentication
 - `db-mongo-{VERSION}`
     - `db-mongo` featured image.
+- `db-mongo-openid-{VERSION}`
+    - `db-mongo` featured image.
+    - `openid` support for authentication
 
 Please see [*"Installation: Docker"* page in The Ktra Book](https://book.ktra.dev/installation/docker.html) for more details.
 ## Features
@@ -67,8 +85,11 @@ Please see [*"Installation: Docker"* page in The Ktra Book](https://book.ktra.de
 - [x] [crates.io mirroring](https://github.com/moriturus/ktra/issues/8).
     - via `crates-io-mirroring` feature turned on by default. 
 
+#### From 0.7.0
+- [x] OpenID support for auto-discoverable identity providers (e.g. Gitlab, _not_ Github)
+
 ### Planned
-- [ ] OAuth and/or OpenID support.
+- [ ] OAuth and/or OpenID support for all identity providers
 - [ ] RDBMS such as [PostgresQL](https://www.postgresql.org/), [MySQL](https://www.mysql.com/) and [MariaDB](https://mariadb.org/) support.
 - [ ] The crates browser like [crates.io](https://crates.io/)
 

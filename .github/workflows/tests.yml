@@ -35,6 +35,33 @@ jobs:
           command: check
           args: --no-default-features --features=secure-auth,${{ matrix.db_feature }},crates-io-mirroring
 
+  check_openid:
+    name: Check ${{ matrix.db_feature }} with OpenId (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        rust: [stable]
+        db_feature: [db-sled, db-redis, db-mongo]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --no-default-features --features=secure-auth,${{ matrix.db_feature }},crates-io-mirroring,openid
+
+
   test:
     name: Test ${{ matrix.db_feature }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
