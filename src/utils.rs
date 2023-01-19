@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};
 
+#[allow(dead_code)]
 #[inline]
 pub fn always_true<T>(_: T) -> bool {
     true

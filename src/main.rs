@@ -1,59 +1,23 @@
 #![type_length_limit = "2000000"]
 
+pub mod apis;
 mod config;
-mod db_manager;
-mod delete;
+pub mod db_manager;
 mod error;
-mod get;
 mod index_manager;
 mod models;
-mod openid;
-mod post;
-mod put;
 mod utils;
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use clap::{clap_app, crate_authors, crate_version, ArgMatches};
 use db_manager::DbManager;
-use std::convert::Infallible;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use tokio::sync::RwLock;
-use warp::{Filter, Rejection, Reply};
+use warp::Filter;
 
 use crate::config::Config;
 use crate::index_manager::IndexManager;
-
-#[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
-fn apis(
-    db_manager: Arc<RwLock<impl DbManager>>,
-    index_manager: Arc<IndexManager>,
-    dl_dir_path: Arc<PathBuf>,
-    dl_path: Vec<String>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let routes = get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
-        .or(delete::apis(db_manager.clone(), index_manager.clone()))
-        .or(put::apis(db_manager.clone(), index_manager, dl_dir_path));
-    #[cfg(not(feature = "openid"))]
-    let routes = routes.or(post::apis(db_manager.clone()));
-    routes
-}
-
-#[tracing::instrument(skip(rejection))]
-async fn handle_rejection(rejection: Rejection) -> Result<impl Reply, Infallible> {
-    if let Some(application_error) = rejection.find::<crate::error::Error>() {
-        let (json, status_code) = application_error.to_reply();
-        Ok(warp::reply::with_status(json, status_code))
-    } else {
-        Ok(warp::reply::with_status(
-            warp::reply::json(&serde_json::json!({
-                "errors": [
-                    { "detail": "resource or api is not defined" }
-                ]
-            })),
-            warp::http::StatusCode::NOT_FOUND,
-        ))
-    }
-}
 
 #[tracing::instrument(skip(config))]
 async fn run_server(config: Config) -> anyhow::Result<()> {
@@ -86,7 +50,7 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     index_manager.pull().await?;
 
     let db_manager = Arc::new(RwLock::new(db_manager));
-    let routes = apis(
+    let routes = apis::registry::apis(
         db_manager.clone(),
         Arc::new(index_manager),
         Arc::new(dl_dir_path),
@@ -97,21 +61,24 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     let routes = {
         tokio::fs::create_dir_all(&config.crate_files_config.cache_dir_path).await?;
         let cache_dir_path = config.crate_files_config.cache_dir_path.clone();
-        routes.or(get::crates_io_mirroring::download_crates_io(
+        routes.or(apis::mirroring::download_crates_io(
             reqwest::Client::builder().build()?,
             Arc::new(cache_dir_path),
         ))
     };
 
     #[cfg(feature = "openid")]
-    let routes = routes.or(openid::apis(
+    let routes = routes.or(apis::openid::apis(
         db_manager.clone(),
         Arc::new(config.openid_config),
     ));
 
+    #[cfg(not(feature = "openid"))]
+    let routes = routes.or(apis::user::apis(db_manager.clone()));
+
     let routes = routes
         .with(warp::trace::request())
-        .recover(handle_rejection);
+        .recover(self::error::handle_rejection);
 
     warp::serve(routes)
         .run(server_config.to_socket_addr())
