@@ -1,4 +1,3 @@
-use crate::config::DbConfig;
 use crate::error::Error;
 use crate::models::{Metadata, Query, Search, User};
 use async_trait::async_trait;
@@ -6,7 +5,6 @@ use semver::Version;
 
 #[async_trait]
 pub trait DbManager: Send + Sync + Sized {
-    async fn new(confg: &DbConfig) -> Result<Self, Error>;
     async fn get_login_prefix(&self) -> Result<&str, Error>;
 
     async fn can_edit_owners(&self, user_id: u32, name: &str) -> Result<bool, Error>;

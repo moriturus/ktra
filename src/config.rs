@@ -89,58 +89,6 @@ impl CrateFilesConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct DbConfig {
-    #[serde(default = "DbConfig::login_prefix_default")]
-    pub login_prefix: String,
-
-    #[cfg(feature = "db-sled")]
-    #[serde(default = "DbConfig::db_dir_path_default")]
-    pub db_dir_path: PathBuf,
-
-    #[cfg(feature = "db-redis")]
-    #[serde(default = "DbConfig::redis_url_default")]
-    pub redis_url: String,
-
-    #[cfg(feature = "db-mongo")]
-    #[serde(default = "DbConfig::mongodb_url_default")]
-    pub mongodb_url: String,
-}
-
-impl Default for DbConfig {
-    fn default() -> DbConfig {
-        DbConfig {
-            login_prefix: DbConfig::login_prefix_default(),
-            #[cfg(feature = "db-sled")]
-            db_dir_path: DbConfig::db_dir_path_default(),
-            #[cfg(feature = "db-redis")]
-            redis_url: DbConfig::redis_url_default(),
-            #[cfg(feature = "db-mongo")]
-            mongodb_url: DbConfig::mongodb_url_default(),
-        }
-    }
-}
-
-impl DbConfig {
-    fn login_prefix_default() -> String {
-        "ktra-secure-auth:".to_owned()
-    }
-
-    #[cfg(feature = "db-sled")]
-    fn db_dir_path_default() -> PathBuf {
-        PathBuf::from("db")
-    }
-
-    #[cfg(feature = "db-redis")]
-    fn redis_url_default() -> String {
-        "redis://localhost".to_owned()
-    }
-
-    #[cfg(feature = "db-mongo")]
-    fn mongodb_url_default() -> String {
-        "mongodb://localhost:27017".to_owned()
-    }
-}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ServerConfig {

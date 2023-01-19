@@ -12,8 +12,7 @@ use tokio::sync::RwLock;
 use warp::Filter;
 
 use ktra::apis;
-use ktra::config::{CrateFilesConfig, DbConfig, IndexConfig, OpenIdConfig, ServerConfig};
-use ktra::db_manager::DbManager;
+use ktra::config::{CrateFilesConfig, IndexConfig, OpenIdConfig, ServerConfig};
 
 #[tracing::instrument(skip(config))]
 async fn run_server(config: Config) -> anyhow::Result<()> {
@@ -31,17 +30,30 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
         feature = "db-sled",
         not(all(feature = "db-redis", feature = "db-mongo"))
     ))]
-    let db_manager = ktra::db_manager::SledDbManager::new(&config.db_config).await?;
+    let db_manager = ktra::db_manager::SledDbManager::new(
+        config.db_config.db_dir_path,
+        config.db_config.login_prefix,
+    )
+    .await?;
     #[cfg(all(
         feature = "db-redis",
         not(all(feature = "db-sled", feature = "db-mongo"))
     ))]
-    let db_manager = ktra::db_manager::RedisDbManager::new(&config.db_config).await?;
+    let db_manager = ktra::db_manager::RedisDbManager::new(
+        config.db_config.redis_url,
+        config.db_config.login_prefix,
+    )
+    .await?;
     #[cfg(all(
         feature = "db-mongo",
         not(all(feature = "db-sled", feature = "db-redis"))
     ))]
-    let db_manager = ktra::db_manager::MongoDbManager::new(&config.db_config).await?;
+    let db_manager = ktra::db_manager::MongoDbManager::new(
+        config.db_config.mongodb_url,
+        config.db_config.login_prefix,
+    )
+    .await?;
+
     let index_manager = ktra::IndexManager::new(config.index_config).await?;
     index_manager.pull().await?;
 
@@ -101,6 +113,58 @@ async fn config(path: impl AsRef<Path>) -> anyhow::Result<Config> {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct DbConfig {
+    #[serde(default = "DbConfig::login_prefix_default")]
+    pub login_prefix: String,
+
+    #[cfg(feature = "db-sled")]
+    #[serde(default = "DbConfig::db_dir_path_default")]
+    pub db_dir_path: PathBuf,
+
+    #[cfg(feature = "db-redis")]
+    #[serde(default = "DbConfig::redis_url_default")]
+    pub redis_url: String,
+
+    #[cfg(feature = "db-mongo")]
+    #[serde(default = "DbConfig::mongodb_url_default")]
+    pub mongodb_url: String,
+}
+
+impl Default for DbConfig {
+    fn default() -> DbConfig {
+        DbConfig {
+            login_prefix: DbConfig::login_prefix_default(),
+            #[cfg(feature = "db-sled")]
+            db_dir_path: DbConfig::db_dir_path_default(),
+            #[cfg(feature = "db-redis")]
+            redis_url: DbConfig::redis_url_default(),
+            #[cfg(feature = "db-mongo")]
+            mongodb_url: DbConfig::mongodb_url_default(),
+        }
+    }
+}
+
+impl DbConfig {
+    fn login_prefix_default() -> String {
+        "ktra-secure-auth:".to_owned()
+    }
+
+    #[cfg(feature = "db-sled")]
+    fn db_dir_path_default() -> PathBuf {
+        PathBuf::from("db")
+    }
+
+    #[cfg(feature = "db-redis")]
+    fn redis_url_default() -> String {
+        "redis://localhost".to_owned()
+    }
+
+    #[cfg(feature = "db-mongo")]
+    fn mongodb_url_default() -> String {
+        "mongodb://localhost:27017".to_owned()
+    }
+}
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     #[serde(default)]
