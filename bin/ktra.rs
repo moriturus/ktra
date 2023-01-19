@@ -1,23 +1,19 @@
 #![type_length_limit = "2000000"]
 
-pub mod apis;
-mod config;
-pub mod db_manager;
-mod error;
-mod index_manager;
-mod models;
-mod utils;
-
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::{clap_app, crate_authors, crate_version, ArgMatches};
-use db_manager::DbManager;
+use futures::TryFutureExt;
+use serde::Deserialize;
+use tokio::fs::OpenOptions;
+use tokio::io::{AsyncReadExt, BufReader};
 use tokio::sync::RwLock;
 use warp::Filter;
 
-use crate::config::Config;
-use crate::index_manager::IndexManager;
+use ktra::apis;
+use ktra::config::{CrateFilesConfig, DbConfig, IndexConfig, OpenIdConfig, ServerConfig};
+use ktra::db_manager::DbManager;
 
 #[tracing::instrument(skip(config))]
 async fn run_server(config: Config) -> anyhow::Result<()> {
@@ -35,18 +31,18 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
         feature = "db-sled",
         not(all(feature = "db-redis", feature = "db-mongo"))
     ))]
-    let db_manager = db_manager::SledDbManager::new(&config.db_config).await?;
+    let db_manager = ktra::db_manager::SledDbManager::new(&config.db_config).await?;
     #[cfg(all(
         feature = "db-redis",
         not(all(feature = "db-sled", feature = "db-mongo"))
     ))]
-    let db_manager = db_manager::RedisDbManager::new(&config.db_config).await?;
+    let db_manager = ktra::db_manager::RedisDbManager::new(&config.db_config).await?;
     #[cfg(all(
         feature = "db-mongo",
         not(all(feature = "db-sled", feature = "db-redis"))
     ))]
-    let db_manager = db_manager::MongoDbManager::new(&config.db_config).await?;
-    let index_manager = IndexManager::new(config.index_config).await?;
+    let db_manager = ktra::db_manager::MongoDbManager::new(&config.db_config).await?;
+    let index_manager = ktra::IndexManager::new(config.index_config).await?;
     index_manager.pull().await?;
 
     let db_manager = Arc::new(RwLock::new(db_manager));
@@ -78,7 +74,7 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
 
     let routes = routes
         .with(warp::trace::request())
-        .recover(self::error::handle_rejection);
+        .recover(ktra::utils::handle_rejection);
 
     warp::serve(routes)
         .run(server_config.to_socket_addr())
@@ -89,10 +85,45 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
 #[tracing::instrument(skip(path))]
 async fn config(path: impl AsRef<Path>) -> anyhow::Result<Config> {
     let path = path.as_ref();
+
     if path.exists() {
-        Config::open(path).await
+        let mut file = OpenOptions::new()
+            .read(true)
+            .open(path)
+            .map_ok(BufReader::new)
+            .await?;
+        let mut buf = String::new();
+        file.read_to_string(&mut buf).await?;
+
+        toml::from_str(&buf).map_err(Into::into)
     } else {
         Ok(Config::default())
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Config {
+    #[serde(default)]
+    pub crate_files_config: CrateFilesConfig,
+    #[serde(default)]
+    pub db_config: DbConfig,
+    #[serde(default)]
+    pub index_config: IndexConfig,
+    #[serde(default)]
+    pub server_config: ServerConfig,
+    #[serde(default)]
+    pub openid_config: OpenIdConfig,
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        Config {
+            crate_files_config: Default::default(),
+            db_config: Default::default(),
+            index_config: Default::default(),
+            server_config: Default::default(),
+            openid_config: Default::default(),
+        }
     }
 }
 

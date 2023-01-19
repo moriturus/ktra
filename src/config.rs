@@ -1,11 +1,8 @@
-use futures::TryFutureExt;
 use serde::Deserialize;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use tokio::fs::OpenOptions;
-use tokio::io::{AsyncReadExt, BufReader};
+use std::path::PathBuf;
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct IndexConfig {
     pub remote_url: String,
     #[serde(default = "IndexConfig::local_path_default")]
@@ -21,6 +18,24 @@ pub struct IndexConfig {
     #[serde(default = "IndexConfig::name_default")]
     pub name: String,
     pub email: Option<String>,
+}
+
+impl Default for IndexConfig {
+    fn default() -> Self {
+        Self {
+            remote_url: Default::default(),
+            local_path: Self::local_path_default(),
+            branch: Self::branch_default(),
+            https_username: Default::default(),
+            https_password: Default::default(),
+            ssh_username: Default::default(),
+            ssh_pubkey_path: Default::default(),
+            ssh_privkey_path: Default::default(),
+            ssh_key_passphrase: Default::default(),
+            name: Self::name_default(),
+            email: Default::default(),
+        }
+    }
 }
 
 impl IndexConfig {
@@ -161,61 +176,12 @@ impl ServerConfig {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct OpenIdConfig {
-    pub(crate) issuer_url: String,
-    pub(crate) redirect_url: String,
-    pub(crate) client_id: String,
-    pub(crate) client_secret: String,
+    pub issuer_url: String,
+    pub redirect_url: String,
+    pub client_id: String,
+    pub client_secret: String,
     #[serde(default)]
-    pub(crate) additional_scopes: Vec<String>,
-    pub(crate) gitlab_authorized_groups: Option<Vec<String>>,
-    pub(crate) gitlab_authorized_users: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Config {
-    #[serde(default)]
-    pub crate_files_config: CrateFilesConfig,
-    #[serde(default)]
-    pub db_config: DbConfig,
-    #[serde(default = "Config::index_config_default")]
-    pub index_config: IndexConfig,
-    #[serde(default)]
-    pub server_config: ServerConfig,
-    #[serde(default)]
-    pub openid_config: OpenIdConfig,
-}
-
-impl Default for Config {
-    fn default() -> Config {
-        Config {
-            crate_files_config: Default::default(),
-            db_config: Default::default(),
-            index_config: Config::index_config_default(),
-            server_config: Default::default(),
-            openid_config: Default::default(),
-        }
-    }
-}
-
-impl Config {
-    pub async fn open(path: impl AsRef<Path>) -> anyhow::Result<Config> {
-        let mut file = OpenOptions::new()
-            .read(true)
-            .open(path)
-            .map_ok(BufReader::new)
-            .await?;
-        let mut buf = String::new();
-        file.read_to_string(&mut buf).await?;
-
-        toml::from_str(&buf).map_err(Into::into)
-    }
-
-    fn index_config_default() -> IndexConfig {
-        IndexConfig {
-            local_path: IndexConfig::local_path_default(),
-            branch: IndexConfig::branch_default(),
-            name: IndexConfig::name_default(),
-            ..Default::default()
-        }
-    }
+    pub additional_scopes: Vec<String>,
+    pub gitlab_authorized_groups: Option<Vec<String>>,
+    pub gitlab_authorized_users: Option<Vec<String>>,
 }

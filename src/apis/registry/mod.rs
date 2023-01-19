@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{convert::Infallible, path::PathBuf, sync::Arc};
 
 use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};

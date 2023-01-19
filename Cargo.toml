@@ -1,24 +1,26 @@
 [package]
 name = "ktra"
+
 version = "0.7.0"
 authors = [ "moriturus <moriturus@alimensir.com>" ]
+description = "Your Little Cargo Registry"
+documentation = "https://book.ktra.dev"
 edition = "2018"
 license = "MIT OR Apache-2.0"
-description = "Your Little Cargo Registry"
 repository = "https://github.com/moriturus/ktra"
 keywords = [ "ktra", "registry", "cargo" ]
 categories = [ "command-line-utilities", "development-tools" ]
 readme = "README.md"
-documentation = "https://book.ktra.dev"
 
 [features]
-default = [ "db-sled", "crates-io-mirroring" ]
+default = [ "db-sled", "crates-io-mirroring", "cli" ]
 
-crates-io-mirroring = [ "reqwest", "tokio-util" ]
+crates-io-mirroring = [ "reqwest" ]
 openid = [ "openidconnect", "reqwest" ]
 db-sled = [ "sled" ]
 db-redis = [ "redis" ]
 db-mongo = [ "mongodb", "bson" ]
+cli = [ "tracing-subscriber", "clap", "toml", "anyhow" ]
 
 [dependencies]
 tokio = { version = "1.1", features = [
@@ -31,18 +33,13 @@ warp = "0.3"
 serde = { version = "1.0", features = [ "derive" ] }
 serde_json = "1.0"
 tracing = "0.1"
-tracing-subscriber = "0.2"
-tracing-futures = "0.2"
 futures = "0.3"
 semver = { version = "0.11", features = [ "serde" ] }
 url = { version = "2.2", features = [ "serde" ] }
-anyhow = "1.0"
 thiserror = "1.0"
 git2 = "0.13"
 bytes = "1.0"
 sha2 = "0.9"
-toml = "0.5"
-clap = "2.33"
 async-trait = "0.1"
 
 reqwest = { version = "0.11", features = [
@@ -50,7 +47,6 @@ reqwest = { version = "0.11", features = [
   "brotli",
   "json",
 ], optional = true }
-tokio-util = { version = "0.6", features = [ "io" ], optional = true }
 
 rand = "0.8"
 rust-argon2 = "0.8"
@@ -61,3 +57,13 @@ mongodb = { version = "1.1", optional = true }
 bson = { version = "1.1", features = [ "u2i" ], optional = true }
 
 openidconnect = { version = "2.1.1", optional = true }
+
+tracing-subscriber = { version = "0.2", optional = true }
+clap = { version = "2.33", optional = true }
+toml = { version = "0.5", optional = true }
+anyhow = { version = "1.0", optional = true }
+
+[[bin]]
+name = "ktra"
+path = "bin/ktra.rs"
+required-features = [ "cli" ]

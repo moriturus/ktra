@@ -1,8 +1,8 @@
+use std::io;
+
 use semver::Version;
 use serde::Serialize;
-use std::{convert::Infallible, io};
 use thiserror::Error;
-use warp::{Rejection, Reply};
 
 #[derive(Debug, Clone, Serialize)]
 struct ErrorMessage {
@@ -180,22 +180,5 @@ impl warp::reject::Reject for Error {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
-    }
-}
-
-#[tracing::instrument(skip(rejection))]
-pub async fn handle_rejection(rejection: Rejection) -> Result<impl Reply, Infallible> {
-    if let Some(application_error) = rejection.find::<crate::error::Error>() {
-        let (json, status_code) = application_error.to_reply();
-        Ok(warp::reply::with_status(json, status_code))
-    } else {
-        Ok(warp::reply::with_status(
-            warp::reply::json(&serde_json::json!({
-                "errors": [
-                    { "detail": "resource or api is not defined" }
-                ]
-            })),
-            warp::http::StatusCode::NOT_FOUND,
-        ))
     }
 }
