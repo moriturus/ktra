@@ -12,9 +12,8 @@ readme = "README.md"
 documentation = "https://book.ktra.dev"
 
 [features]
-default = [ "secure-auth", "db-sled", "crates-io-mirroring" ]
+default = [ "db-sled", "crates-io-mirroring" ]
 
-secure-auth = [ "rand", "rust-argon2" ]
 crates-io-mirroring = [ "reqwest", "tokio-util" ]
 openid = [ "openidconnect", "reqwest" ]
 db-sled = [ "sled" ]
@@ -53,8 +52,8 @@ reqwest = { version = "0.11", features = [
 ], optional = true }
 tokio-util = { version = "0.6", features = [ "io" ], optional = true }
 
-rand = { version = "0.8", optional = true }
-rust-argon2 = { version = "0.8", optional = true }
+rand = "0.8"
+rust-argon2 = "0.8"
 
 sled = { version = "0.34", optional = true }
 redis = { version = "0.19", features = [ "tokio-comp" ], optional = true }
