@@ -1,38 +1,42 @@
 [package]
 name = "ktra"
 version = "0.7.0"
-authors = ["moriturus <moriturus@alimensir.com>"]
+authors = [ "moriturus <moriturus@alimensir.com>" ]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 description = "Your Little Cargo Registry"
 repository = "https://github.com/moriturus/ktra"
-keywords = ["ktra", "registry", "cargo"]
-categories = ["command-line-utilities", "development-tools"]
+keywords = [ "ktra", "registry", "cargo" ]
+categories = [ "command-line-utilities", "development-tools" ]
 readme = "README.md"
 documentation = "https://book.ktra.dev"
 
 [features]
-default = ["secure-auth", "db-sled", "crates-io-mirroring"]
+default = [ "secure-auth", "db-sled", "crates-io-mirroring" ]
 
-secure-auth = ["rand", "rust-argon2"]
-crates-io-mirroring = ["reqwest", "tokio-util"]
-mirroring-dummy = []
-openid = ["openidconnect", "reqwest"]
-db-sled = ["sled"]
-db-redis = ["redis"]
-db-mongo = ["mongodb", "bson"]
+secure-auth = [ "rand", "rust-argon2" ]
+crates-io-mirroring = [ "reqwest", "tokio-util" ]
+openid = [ "openidconnect", "reqwest" ]
+db-sled = [ "sled" ]
+db-redis = [ "redis" ]
+db-mongo = [ "mongodb", "bson" ]
 
 [dependencies]
-tokio = { version = "1.1", features = ["macros", "rt-multi-thread", "fs", "io-util"] }
+tokio = { version = "1.1", features = [
+  "macros",
+  "rt-multi-thread",
+  "fs",
+  "io-util",
+] }
 warp = "0.3"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = [ "derive" ] }
 serde_json = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.2"
 tracing-futures = "0.2"
 futures = "0.3"
-semver = { version = "0.11", features = ["serde"] }
-url = { version = "2.2", features = ["serde"] }
+semver = { version = "0.11", features = [ "serde" ] }
+url = { version = "2.2", features = [ "serde" ] }
 anyhow = "1.0"
 thiserror = "1.0"
 git2 = "0.13"
@@ -42,15 +46,19 @@ toml = "0.5"
 clap = "2.33"
 async-trait = "0.1"
 
-reqwest = { version = "0.11", features = ["gzip", "brotli", "json"], optional = true }
-tokio-util = { version = "0.6", features = ["io"], optional = true }
+reqwest = { version = "0.11", features = [
+  "gzip",
+  "brotli",
+  "json",
+], optional = true }
+tokio-util = { version = "0.6", features = [ "io" ], optional = true }
 
 rand = { version = "0.8", optional = true }
 rust-argon2 = { version = "0.8", optional = true }
 
 sled = { version = "0.34", optional = true }
-redis = { version = "0.19", features = ["tokio-comp"], optional = true }
+redis = { version = "0.19", features = [ "tokio-comp" ], optional = true }
 mongodb = { version = "1.1", optional = true }
-bson = { version = "1.1", features = ["u2i"], optional = true }
+bson = { version = "1.1", features = [ "u2i" ], optional = true }
 
 openidconnect = { version = "2.1.1", optional = true }

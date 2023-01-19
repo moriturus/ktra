@@ -12,66 +12,17 @@ mod post;
 mod put;
 mod utils;
 
-use crate::config::Config;
-use crate::index_manager::IndexManager;
 use clap::{clap_app, crate_authors, crate_version, ArgMatches};
 use db_manager::DbManager;
-#[cfg(feature = "crates-io-mirroring")]
-use reqwest::Client;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};
 
-#[cfg(all(
-    feature = "db-mongo",
-    not(all(feature = "db-redis", feature = "db-sled"))
-))]
-use db_manager::MongoDbManager;
-#[cfg(all(
-    feature = "db-redis",
-    not(all(feature = "db-sled", feature = "db-mongo"))
-))]
-use db_manager::RedisDbManager;
-#[cfg(all(
-    feature = "db-sled",
-    not(all(feature = "db-redis", feature = "db-mongo"))
-))]
-use db_manager::SledDbManager;
+use crate::config::Config;
+use crate::index_manager::IndexManager;
 
-#[cfg(feature = "crates-io-mirroring")]
-#[tracing::instrument(skip(
-    db_manager,
-    index_manager,
-    dl_dir_path,
-    http_client,
-    cache_dir_path,
-    dl_path
-))]
-fn apis(
-    db_manager: Arc<RwLock<impl DbManager>>,
-    index_manager: Arc<IndexManager>,
-    dl_dir_path: Arc<PathBuf>,
-    http_client: Client,
-    cache_dir_path: Arc<PathBuf>,
-    dl_path: Vec<String>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let routes = get::apis(
-        db_manager.clone(),
-        dl_dir_path.clone(),
-        http_client,
-        cache_dir_path,
-        dl_path,
-    )
-    .or(delete::apis(db_manager.clone(), index_manager.clone()))
-    .or(put::apis(db_manager.clone(), index_manager, dl_dir_path));
-    #[cfg(not(feature = "openid"))]
-    let routes = routes.or(post::apis(db_manager.clone()));
-    routes
-}
-
-#[cfg(not(feature = "crates-io-mirroring"))]
 #[tracing::instrument(skip(db_manager, index_manager, dl_dir_path, dl_path))]
 fn apis(
     db_manager: Arc<RwLock<impl DbManager>>,
@@ -81,7 +32,7 @@ fn apis(
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let routes = get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
         .or(delete::apis(db_manager.clone(), index_manager.clone()))
-        .or(put::apis(db_manager, index_manager, dl_dir_path));
+        .or(put::apis(db_manager.clone(), index_manager, dl_dir_path));
     #[cfg(not(feature = "openid"))]
     let routes = routes.or(post::apis(db_manager.clone()));
     routes
@@ -112,11 +63,7 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     );
 
     tokio::fs::create_dir_all(&config.crate_files_config.dl_dir_path).await?;
-    #[cfg(feature = "crates-io-mirroring")]
-    tokio::fs::create_dir_all(&config.crate_files_config.cache_dir_path).await?;
     let dl_dir_path = config.crate_files_config.dl_dir_path.clone();
-    #[cfg(feature = "crates-io-mirroring")]
-    let cache_dir_path = config.crate_files_config.cache_dir_path.clone();
     let dl_path = config.crate_files_config.dl_path.clone();
     let server_config = config.server_config.clone();
 
@@ -124,34 +71,37 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
         feature = "db-sled",
         not(all(feature = "db-redis", feature = "db-mongo"))
     ))]
-    let db_manager = SledDbManager::new(&config.db_config).await?;
+    let db_manager = db_manager::SledDbManager::new(&config.db_config).await?;
     #[cfg(all(
         feature = "db-redis",
         not(all(feature = "db-sled", feature = "db-mongo"))
     ))]
-    let db_manager = RedisDbManager::new(&config.db_config).await?;
+    let db_manager = db_manager::RedisDbManager::new(&config.db_config).await?;
     #[cfg(all(
         feature = "db-mongo",
         not(all(feature = "db-sled", feature = "db-redis"))
     ))]
-    let db_manager = MongoDbManager::new(&config.db_config).await?;
+    let db_manager = db_manager::MongoDbManager::new(&config.db_config).await?;
     let index_manager = IndexManager::new(config.index_config).await?;
     index_manager.pull().await?;
-
-    #[cfg(feature = "crates-io-mirroring")]
-    let http_client = Client::builder().build()?;
 
     let db_manager = Arc::new(RwLock::new(db_manager));
     let routes = apis(
         db_manager.clone(),
         Arc::new(index_manager),
         Arc::new(dl_dir_path),
-        #[cfg(feature = "crates-io-mirroring")]
-        http_client,
-        #[cfg(feature = "crates-io-mirroring")]
-        Arc::new(cache_dir_path),
         dl_path,
     );
+
+    #[cfg(feature = "crates-io-mirroring")]
+    let routes = {
+        tokio::fs::create_dir_all(&config.crate_files_config.cache_dir_path).await?;
+        let cache_dir_path = config.crate_files_config.cache_dir_path.clone();
+        routes.or(get::crates_io_mirroring::download_crates_io(
+            reqwest::Client::builder().build()?,
+            Arc::new(cache_dir_path),
+        ))
+    };
 
     #[cfg(feature = "openid")]
     let routes = routes.or(openid::apis(
@@ -320,41 +270,37 @@ async fn main() -> anyhow::Result<()> {
     }
 
     #[cfg(feature = "openid")]
-    if let Some(issuer) = matches.value_of("OPENID_ISSUER").map(ToOwned::to_owned) {
-        config.openid_config.issuer_url = issuer;
-    }
+    {
+        if let Some(issuer) = matches.value_of("OPENID_ISSUER").map(ToOwned::to_owned) {
+            config.openid_config.issuer_url = issuer;
+        }
 
-    #[cfg(feature = "openid")]
-    if let Some(redirect) = matches.value_of("OPENID_REDIRECT").map(ToOwned::to_owned) {
-        config.openid_config.redirect_url = redirect;
-    }
+        if let Some(redirect) = matches.value_of("OPENID_REDIRECT").map(ToOwned::to_owned) {
+            config.openid_config.redirect_url = redirect;
+        }
 
-    #[cfg(feature = "openid")]
-    if let Some(client_id) = matches.value_of("OPENID_APP_ID").map(ToOwned::to_owned) {
-        config.openid_config.client_id = client_id;
-    }
+        if let Some(client_id) = matches.value_of("OPENID_APP_ID").map(ToOwned::to_owned) {
+            config.openid_config.client_id = client_id;
+        }
 
-    #[cfg(feature = "openid")]
-    if let Some(client_secret) = matches.value_of("OPENID_APP_SECRET").map(ToOwned::to_owned) {
-        config.openid_config.client_secret = client_secret;
-    }
+        if let Some(client_secret) = matches.value_of("OPENID_APP_SECRET").map(ToOwned::to_owned) {
+            config.openid_config.client_secret = client_secret;
+        }
 
-    #[cfg(feature = "openid")]
-    if let Some(scopes) = matches.value_of("OPENID_ADD_SCOPES").map(ToOwned::to_owned) {
-        config.openid_config.additional_scopes =
-            scopes.split(',').map(ToString::to_string).collect();
-    }
+        if let Some(scopes) = matches.value_of("OPENID_ADD_SCOPES").map(ToOwned::to_owned) {
+            config.openid_config.additional_scopes =
+                scopes.split(',').map(ToString::to_string).collect();
+        }
 
-    #[cfg(feature = "openid")]
-    if let Some(gitlab_groups) = matches.value_of("OPENID_GITLAB_GROUPS") {
-        config.openid_config.gitlab_authorized_groups =
-            Some(gitlab_groups.split(',').map(ToString::to_string).collect());
-    }
+        if let Some(gitlab_groups) = matches.value_of("OPENID_GITLAB_GROUPS") {
+            config.openid_config.gitlab_authorized_groups =
+                Some(gitlab_groups.split(',').map(ToString::to_string).collect());
+        }
 
-    #[cfg(feature = "openid")]
-    if let Some(gitlab_users) = matches.value_of("OPENID_GITLAB_USERS") {
-        config.openid_config.gitlab_authorized_users =
-            Some(gitlab_users.split(',').map(ToString::to_string).collect());
+        if let Some(gitlab_users) = matches.value_of("OPENID_GITLAB_USERS") {
+            config.openid_config.gitlab_authorized_users =
+                Some(gitlab_users.split(',').map(ToString::to_string).collect());
+        }
     }
 
     run_server(config).await

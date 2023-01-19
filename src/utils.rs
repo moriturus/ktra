@@ -5,8 +5,6 @@ use crate::index_manager::IndexManager;
 use futures::TryFutureExt;
 use rand::distributions::Alphanumeric;
 use rand::prelude::*;
-#[cfg(feature = "crates-io-mirroring")]
-use reqwest::Client;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -88,8 +86,8 @@ pub fn with_cache_dir_path(
 #[cfg(feature = "crates-io-mirroring")]
 #[tracing::instrument(skip(client))]
 pub fn with_http_client(
-    client: Client,
-) -> impl Filter<Extract = (Client,), Error = Infallible> + Clone {
+    client: reqwest::Client,
+) -> impl Filter<Extract = (reqwest::Client,), Error = Infallible> + Clone {
     warp::any().map(move || client.clone())
 }
 
