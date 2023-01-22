@@ -1,6 +1,5 @@
 #![cfg(feature = "db-redis")]
 
-use crate::config::DbConfig;
 use crate::error::Error;
 use crate::models::{Entry, Metadata, Query, Search, User};
 use argon2::{self, hash_encoded, verify_encoded};
@@ -32,28 +31,6 @@ pub struct RedisDbManager {
 
 #[async_trait]
 impl DbManager for RedisDbManager {
-    #[tracing::instrument(skip(config))]
-    async fn new(config: &DbConfig) -> Result<RedisDbManager, Error> {
-        tracing::info!("connect to redis server: {}", config.redis_url);
-
-        let initialization = async {
-            let client = Client::open(&*config.redis_url)?;
-            let mut connection = client.get_async_connection().await?;
-
-            if !connection.exists(SCHEMA_VERSION_KEY).await? {
-                connection.set(SCHEMA_VERSION_KEY, &SCHEMA_VERSION).await?;
-            }
-
-            let db_manager = RedisDbManager {
-                client,
-                login_prefix: config.login_prefix.clone(),
-            };
-            Ok(db_manager)
-        };
-
-        initialization.map_err(Error::Db).await
-    }
-
     async fn get_login_prefix(&self) -> Result<&str, Error> {
         Ok(&self.login_prefix)
     }
@@ -433,6 +410,28 @@ impl DbManager for RedisDbManager {
 }
 
 impl RedisDbManager {
+    #[tracing::instrument(skip(redis_url, login_prefix))]
+    pub async fn new(redis_url: String, login_prefix: String) -> Result<RedisDbManager, Error> {
+        tracing::info!("connect to redis server: {}", redis_url);
+
+        let initialization = async {
+            let client = Client::open(&*redis_url)?;
+            let mut connection = client.get_async_connection().await?;
+
+            if !connection.exists(SCHEMA_VERSION_KEY).await? {
+                connection.set(SCHEMA_VERSION_KEY, &SCHEMA_VERSION).await?;
+            }
+
+            let db_manager = RedisDbManager {
+                client,
+                login_prefix,
+            };
+            Ok(db_manager)
+        };
+
+        initialization.map_err(Error::Db).await
+    }
+
     #[tracing::instrument(skip(self, name, logins, editor))]
     async fn edit_owners<N, L, S, E>(&self, name: N, logins: L, editor: E) -> Result<(), Error>
     where

@@ -33,7 +33,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --no-default-features --features=secure-auth,${{ matrix.db_feature }},crates-io-mirroring
+          args: --no-default-features --features=${{ matrix.db_feature }},crates-io-mirroring
 
   check_openid:
     name: Check ${{ matrix.db_feature }} with OpenId (${{ matrix.os }})
@@ -59,7 +59,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --no-default-features --features=secure-auth,${{ matrix.db_feature }},crates-io-mirroring,openid
+          args: --no-default-features --features=${{ matrix.db_feature }},crates-io-mirroring,openid
 
 
   test:
@@ -86,7 +86,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features=secure-auth,${{ matrix.db_feature }},crates-io-mirroring
+          args: --no-default-features --features=${{ matrix.db_feature }},crates-io-mirroring
 
   lints:
     name: Lints (${{ matrix.os }})

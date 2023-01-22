@@ -3,7 +3,7 @@
 use crate::config::OpenIdConfig;
 use crate::db_manager::DbManager;
 use crate::error::Error;
-use crate::models::{Claims, CodeQuery, User};
+use crate::models::User;
 use crate::utils::*;
 use futures::TryFutureExt;
 use openidconnect::core::{
@@ -14,10 +14,28 @@ use openidconnect::{
     AdditionalClaims, AuthenticationFlow, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
     IssuerUrl, Nonce, OAuth2TokenResponse, RedirectUrl, Scope, UserInfoClaims,
 };
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeQuery {
+    pub code: String,
+    pub state: Option<String>,
+}
+
+/// The additional claims OpenId providers may send
+///
+/// All fields here are options so that the extra claims are caught when presents
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Claims {
+    pub(crate) sub: Option<String>,
+    pub(crate) sub_legacy: Option<String>,
+    // Gitlab claims return the groups a user is in.
+    // This property is used when gitlab_authorized_groups is set in the configuration
+    pub(crate) groups: Option<Vec<String>>,
+}
 impl AdditionalClaims for Claims {}
 
 #[tracing::instrument(skip(db_manager, openid_config))]

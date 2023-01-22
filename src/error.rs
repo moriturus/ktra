@@ -1,6 +1,7 @@
+use std::io;
+
 use semver::Version;
 use serde::Serialize;
-use std::io;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize)]

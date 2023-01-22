@@ -1,3 +1,4 @@
+//! Utility functions
 use crate::config::OpenIdConfig;
 use crate::db_manager::DbManager;
 use crate::error::Error;
@@ -5,14 +6,13 @@ use crate::index_manager::IndexManager;
 use futures::TryFutureExt;
 use rand::distributions::Alphanumeric;
 use rand::prelude::*;
-#[cfg(feature = "crates-io-mirroring")]
-use reqwest::Client;
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};
 
+#[allow(dead_code)]
 #[inline]
 pub fn always_true<T>(_: T) -> bool {
     true
@@ -70,6 +70,23 @@ pub fn ok_with_msg_json_message(msg: impl Into<String>) -> impl Reply {
     }))
 }
 
+#[tracing::instrument(skip(rejection))]
+pub async fn handle_rejection(rejection: Rejection) -> Result<impl Reply, Infallible> {
+    if let Some(application_error) = rejection.find::<crate::error::Error>() {
+        let (json, status_code) = application_error.to_reply();
+        Ok(warp::reply::with_status(json, status_code))
+    } else {
+        Ok(warp::reply::with_status(
+            warp::reply::json(&serde_json::json!({
+                "errors": [
+                    { "detail": "resource or api is not defined" }
+                ]
+            })),
+            warp::http::StatusCode::NOT_FOUND,
+        ))
+    }
+}
+
 #[tracing::instrument(skip(dl_dir_path))]
 pub fn with_dl_dir_path(
     dl_dir_path: Arc<PathBuf>,
@@ -88,8 +105,8 @@ pub fn with_cache_dir_path(
 #[cfg(feature = "crates-io-mirroring")]
 #[tracing::instrument(skip(client))]
 pub fn with_http_client(
-    client: Client,
-) -> impl Filter<Extract = (Client,), Error = Infallible> + Clone {
+    client: reqwest::Client,
+) -> impl Filter<Extract = (reqwest::Client,), Error = Infallible> + Clone {
     warp::any().map(move || client.clone())
 }
 
@@ -124,7 +141,7 @@ mod tests {
     use super::package_dir_path;
 
     #[test]
-    fn test_package_dir_path_a() -> anyhow::Result<()> {
+    fn test_package_dir_path_a() -> Result<(), crate::error::Error> {
         let dir = package_dir_path("a")?;
         assert_eq!(dir.as_ref().to_str().unwrap(), "1");
 
@@ -132,7 +149,7 @@ mod tests {
     }
 
     #[test]
-    fn test_package_dir_path_ab() -> anyhow::Result<()> {
+    fn test_package_dir_path_ab() -> Result<(), crate::error::Error> {
         let dir = package_dir_path("ab")?;
         assert_eq!(dir.as_ref().to_str().unwrap(), "2");
 
@@ -140,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn test_package_dir_path_abc() -> anyhow::Result<()> {
+    fn test_package_dir_path_abc() -> Result<(), crate::error::Error> {
         let dir = package_dir_path("abc")?;
         assert_eq!(dir.as_ref().to_str().unwrap(), "3/a");
 
@@ -148,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn test_package_dir_path_abcd() -> anyhow::Result<()> {
+    fn test_package_dir_path_abcd() -> Result<(), crate::error::Error> {
         let dir = package_dir_path("abcd")?;
         assert_eq!(dir.as_ref().to_str().unwrap(), "ab/cd");
 

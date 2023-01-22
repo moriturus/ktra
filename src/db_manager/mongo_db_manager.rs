@@ -1,6 +1,5 @@
 #![cfg(feature = "db-mongo")]
 
-use crate::config::DbConfig;
 use crate::error::Error;
 use crate::models::{Entry, Metadata, Query, Search, User};
 use argon2::{self, hash_encoded, verify_encoded};
@@ -55,40 +54,6 @@ pub struct MongoDbManager {
 
 #[async_trait]
 impl DbManager for MongoDbManager {
-    #[tracing::instrument(skip(config))]
-    async fn new(config: &DbConfig) -> Result<MongoDbManager, Error> {
-        tracing::info!("connect to MongoDB server: {}", config.mongodb_url);
-
-        let url = Url::parse(&config.mongodb_url).map_err(Error::UrlParsing)?;
-        let database_name = url
-            .path_segments()
-            .and_then(|s| s.last())
-            .map(ToOwned::to_owned)
-            .unwrap_or_else(|| "ktra".to_owned());
-
-        let initialization = async {
-            let options = ClientOptions::parse(url.as_str()).await?;
-            let client = Client::with_options(options)?;
-            let db = client.database(&database_name);
-            let collection = db.collection(SCHEMA_VERSION_KEY);
-
-            if collection.estimated_document_count(None).await? == 0 {
-                collection
-                    .insert_one(doc! { "version": SCHEMA_VERSION }, None)
-                    .await?;
-            }
-
-            let db_manager = MongoDbManager {
-                client,
-                database_name,
-                login_prefix: config.login_prefix.clone(),
-            };
-            Ok(db_manager)
-        };
-
-        initialization.map_err(Error::Db).await
-    }
-
     async fn get_login_prefix(&self) -> Result<&str, Error> {
         Ok(&self.login_prefix)
     }
@@ -546,10 +511,6 @@ impl DbManager for MongoDbManager {
         state: openidconnect::CsrfToken,
         nonce: openidconnect::Nonce,
     ) -> Result<(), Error> {
-        let collection = self
-            .client
-            .database(&self.database_name)
-            .collection(OAUTH_NONCES_KEY);
         let nonces_query_document = doc! {"state": state.secret().to_string() };
 
         self.update_or_insert_one(OAUTH_NONCES_KEY, nonces_query_document, nonce)
@@ -578,6 +539,40 @@ impl DbManager for MongoDbManager {
 }
 
 impl MongoDbManager {
+    #[tracing::instrument(skip(mongodb_url, login_prefix))]
+    pub async fn new(mongodb_url: String, login_prefix: String) -> Result<MongoDbManager, Error> {
+        tracing::info!("connect to MongoDB server: {}", mongodb_url);
+
+        let url = Url::parse(&mongodb_url).map_err(Error::UrlParsing)?;
+        let database_name = url
+            .path_segments()
+            .and_then(|s| s.last())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| "ktra".to_owned());
+
+        let initialization = async {
+            let options = ClientOptions::parse(url.as_str()).await?;
+            let client = Client::with_options(options)?;
+            let db = client.database(&database_name);
+            let collection = db.collection(SCHEMA_VERSION_KEY);
+
+            if collection.estimated_document_count(None).await? == 0 {
+                collection
+                    .insert_one(doc! { "version": SCHEMA_VERSION }, None)
+                    .await?;
+            }
+
+            let db_manager = MongoDbManager {
+                client,
+                database_name,
+                login_prefix,
+            };
+            Ok(db_manager)
+        };
+
+        initialization.map_err(Error::Db).await
+    }
+
     #[tracing::instrument(skip(self, name, logins, editor))]
     async fn edit_owners<N, L, S, E>(&self, name: N, logins: L, editor: E) -> Result<(), Error>
     where

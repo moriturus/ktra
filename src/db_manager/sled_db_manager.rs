@@ -1,6 +1,5 @@
 #![cfg(feature = "db-sled")]
 
-use crate::config::DbConfig;
 use crate::error::Error;
 use crate::models::{Entry, Metadata, Query, Search, User};
 use argon2::{self, hash_encoded, verify_encoded};
@@ -11,6 +10,7 @@ use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
 use sled::{self, Db};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use crate::db_manager::utils::{argon2_config_and_salt, check_crate_name, normalized_crate_name};
 use crate::db_manager::DbManager;
@@ -22,6 +22,7 @@ const SCHEMA_VERSION: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 3];
 const USERS_KEY: &str = "__USERS__";
 const PASSWORDS_KEY: &str = "__PASSWORDS__";
 const TOKENS_KEY: &str = "__TOKENS__";
+#[cfg(feature = "openid")]
 const OAUTH_NONCES_KEY: &str = "__OAUTH_NONCES__";
 
 const OLD_TOKENS_KEY: &str = "tokens";
@@ -33,31 +34,6 @@ pub struct SledDbManager {
 
 #[async_trait]
 impl DbManager for SledDbManager {
-    #[tracing::instrument(skip(config))]
-    async fn new(config: &DbConfig) -> Result<SledDbManager, Error> {
-        let path = config.db_dir_path.clone();
-        tracing::info!("create and/or open database: {:?}", config.db_dir_path);
-
-        let tree = tokio::task::spawn_blocking(|| sled::open(path).map_err(Error::Db))
-            .map_err(Error::Join)
-            .await??;
-        Self::migrate_tokens(&tree).await?;
-
-        if !tree.contains_key(SCHEMA_VERSION_KEY).map_err(Error::Db)? {
-            tree.insert(SCHEMA_VERSION_KEY, &SCHEMA_VERSION)
-                .map(drop)
-                .map_err(Error::Db)?;
-            tree.flush_async().map_err(Error::Db).await?;
-        }
-
-        let db_manager = SledDbManager {
-            tree,
-            login_prefix: config.login_prefix.clone(),
-        };
-
-        Ok(db_manager)
-    }
-
     async fn get_login_prefix(&self) -> Result<&str, Error> {
         Ok(&self.login_prefix)
     }
@@ -434,6 +410,28 @@ impl DbManager for SledDbManager {
 }
 
 impl SledDbManager {
+    #[tracing::instrument(skip(db_dir_path, login_prefix))]
+    pub async fn new(db_dir_path: PathBuf, login_prefix: String) -> Result<SledDbManager, Error> {
+        let path = db_dir_path;
+        tracing::info!("create and/or open database: {:?}", path.to_string_lossy());
+
+        let tree = tokio::task::spawn_blocking(move || sled::open(path).map_err(Error::Db))
+            .map_err(Error::Join)
+            .await??;
+        Self::migrate_tokens(&tree).await?;
+
+        if !tree.contains_key(SCHEMA_VERSION_KEY).map_err(Error::Db)? {
+            tree.insert(SCHEMA_VERSION_KEY, &SCHEMA_VERSION)
+                .map(drop)
+                .map_err(Error::Db)?;
+            tree.flush_async().map_err(Error::Db).await?;
+        }
+
+        let db_manager = SledDbManager { tree, login_prefix };
+
+        Ok(db_manager)
+    }
+
     #[tracing::instrument(skip(self, name, logins, editor))]
     async fn edit_owners<N, L, S, E>(&self, name: N, logins: L, editor: E) -> Result<(), Error>
     where

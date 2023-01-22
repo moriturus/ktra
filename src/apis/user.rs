@@ -18,6 +18,7 @@ pub fn apis(
     new_user(db_manager.clone())
         .or(login(db_manager.clone()))
         .or(change_password(db_manager))
+        .or(me())
 }
 
 #[tracing::instrument(skip(db_manager))]
@@ -156,4 +157,11 @@ async fn handle_change_password(
     } else {
         Err(Error::InvalidPassword).map_err(warp::reject::custom)
     }
+}
+
+#[tracing::instrument]
+fn me() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    warp::get()
+        .and(warp::path!("me"))
+        .map(|| "$ curl -X POST -H 'Content-Type: application/json' -d '{\"password\":\"YOUR PASSWORD\"}' https://<YOURDOMAIN>/ktra/api/v1/login/<YOUR USERNAME>")
 }
