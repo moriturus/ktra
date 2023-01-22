@@ -89,7 +89,6 @@ impl CrateFilesConfig {
     }
 }
 
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct ServerConfig {
     #[serde(default = "ServerConfig::address_default")]
