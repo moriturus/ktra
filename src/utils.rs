@@ -119,6 +119,28 @@ pub fn authorization_header() -> impl Filter<Extract = (String,), Error = Reject
     warp::header::<String>("Authorization")
 }
 
+#[tracing::instrument(skip(db_manager))]
+pub fn assure_authorized(
+    db_manager: Arc<RwLock<impl DbManager>>,
+) -> impl Filter<Extract = (u32,), Error = Rejection> + Clone {
+    authorization_header()
+        .and(with_db_manager(db_manager))
+        .and_then(lookup_userid)
+}
+
+#[tracing::instrument(skip(token, db_manager))]
+async fn lookup_userid(
+    token: String,
+    db_manager: Arc<RwLock<impl DbManager>>,
+) -> Result<u32, Rejection> {
+    Ok(db_manager
+        .write()
+        .await
+        .user_id_for_token(&token)
+        .map_err(warp::reject::custom)
+        .await?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::package_dir_path;
