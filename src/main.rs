@@ -67,7 +67,7 @@ fn apis(
     .or(delete::apis(db_manager.clone(), index_manager.clone()))
     .or(put::apis(db_manager.clone(), index_manager, dl_dir_path));
     #[cfg(not(feature = "openid"))]
-    let routes = routes.or(post::apis(db_manager.clone()));
+    let routes = routes.or(post::apis(db_manager));
     routes
 }
 
@@ -81,9 +81,9 @@ fn apis(
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let routes = get::apis(db_manager.clone(), dl_dir_path.clone(), dl_path)
         .or(delete::apis(db_manager.clone(), index_manager.clone()))
-        .or(put::apis(db_manager, index_manager, dl_dir_path));
+        .or(put::apis(db_manager.clone(), index_manager, dl_dir_path));
     #[cfg(not(feature = "openid"))]
-    let routes = routes.or(post::apis(db_manager.clone()));
+    let routes = routes.or(post::apis(db_manager));
     routes
 }
 
