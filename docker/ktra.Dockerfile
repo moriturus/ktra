@@ -25,7 +25,7 @@ LABEL org.opencontainers.image.licenses "(Apache-2.0 OR MIT)"
 
 RUN apt-get update &&\
     apt-get upgrade -y &&\
-    apt-get install -y libssl1.1 ca-certificates &&\
+    apt-get install -y libssl1.1 ca-certificates openssh-client &&\
     apt-get autoremove -y &&\
     apt-get clean -y
 
