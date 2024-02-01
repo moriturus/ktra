@@ -30,7 +30,7 @@ pub fn apis(
     dl_dir_path: Arc<PathBuf>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let routes = download(dl_dir_path, path)
+    let routes = download(db_manager.clone(), dl_dir_path, path)
         .or(owners(db_manager.clone()))
         .or(search(db_manager));
 
@@ -50,7 +50,7 @@ pub fn apis(
     cache_dir_path: Arc<PathBuf>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let routes = download(dl_dir_path, path)
+    let routes = download(db_manager.clone(), dl_dir_path, path)
         .or(download_crates_io(http_client, cache_dir_path))
         .or(owners(db_manager.clone()))
         .or(search(db_manager));
@@ -68,12 +68,15 @@ pub(crate) fn into_boxed_filters(path: Vec<String>) -> BoxedFilter<()> {
     })
 }
 
-#[tracing::instrument(skip(path, dl_dir_path))]
+#[tracing::instrument(skip(path, dl_dir_path, db_manager))]
 fn download(
+    db_manager: Arc<RwLock<impl DbManager>>,
     dl_dir_path: Arc<PathBuf>,
     path: Vec<String>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    into_boxed_filters(path).and(warp::fs::dir(dl_dir_path.to_path_buf()))
+    into_boxed_filters(path)
+        .and(assure_authorized(db_manager).map(|_| ()).untuple_one())
+        .and(warp::fs::dir(dl_dir_path.to_path_buf()))
 }
 
 #[cfg(feature = "crates-io-mirroring")]
@@ -180,8 +183,9 @@ fn owners(
     db_manager: Arc<RwLock<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::get()
-        .and(with_db_manager(db_manager))
+        .and(with_db_manager(db_manager.clone()))
         .and(authorization_header())
+        .and(assure_authorized(db_manager).map(|_| ()).untuple_one())
         .and(warp::path!("api" / "v1" / "crates" / String / "owners"))
         .and_then(handle_owners)
 }
@@ -207,7 +211,8 @@ fn search(
     db_manager: Arc<RwLock<impl DbManager>>,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::get()
-        .and(with_db_manager(db_manager))
+        .and(with_db_manager(db_manager.clone()))
+        .and(assure_authorized(db_manager).map(|_| ()).untuple_one())
         .and(warp::path!("api" / "v1" / "crates"))
         .and(warp::query::<Query>())
         .and_then(handle_search)
