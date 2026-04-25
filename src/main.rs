@@ -24,19 +24,16 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::{Filter, Rejection, Reply};
 
-#[cfg(all(
-    feature = "db-mongo",
-    not(all(feature = "db-redis", feature = "db-sled"))
-))]
+#[cfg(not(any(feature = "db-sled", feature = "db-redis", feature = "db-mongo")))]
+compile_error!("enable one database backend feature: db-sled, db-redis, or db-mongo");
+
+#[cfg(feature = "db-mongo")]
 use db_manager::MongoDbManager;
-#[cfg(all(
-    feature = "db-redis",
-    not(all(feature = "db-sled", feature = "db-mongo"))
-))]
+#[cfg(all(feature = "db-redis", not(feature = "db-mongo")))]
 use db_manager::RedisDbManager;
 #[cfg(all(
     feature = "db-sled",
-    not(all(feature = "db-redis", feature = "db-mongo"))
+    not(any(feature = "db-redis", feature = "db-mongo"))
 ))]
 use db_manager::SledDbManager;
 
@@ -120,21 +117,15 @@ async fn run_server(config: Config) -> anyhow::Result<()> {
     let dl_path = config.crate_files_config.dl_path.clone();
     let server_config = config.server_config.clone();
 
-    #[cfg(all(
-        feature = "db-sled",
-        not(all(feature = "db-redis", feature = "db-mongo"))
-    ))]
-    let db_manager = SledDbManager::new(&config.db_config).await?;
-    #[cfg(all(
-        feature = "db-redis",
-        not(all(feature = "db-sled", feature = "db-mongo"))
-    ))]
+    #[cfg(feature = "db-mongo")]
+    let db_manager = MongoDbManager::new(&config.db_config).await?;
+    #[cfg(all(feature = "db-redis", not(feature = "db-mongo")))]
     let db_manager = RedisDbManager::new(&config.db_config).await?;
     #[cfg(all(
-        feature = "db-mongo",
-        not(all(feature = "db-sled", feature = "db-redis"))
+        feature = "db-sled",
+        not(any(feature = "db-redis", feature = "db-mongo"))
     ))]
-    let db_manager = MongoDbManager::new(&config.db_config).await?;
+    let db_manager = SledDbManager::new(&config.db_config).await?;
     let index_manager = IndexManager::new(config.index_config).await?;
     index_manager.pull().await?;
 

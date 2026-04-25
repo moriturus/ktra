@@ -38,16 +38,19 @@ impl DbManager for SledDbManager {
         let path = config.db_dir_path.clone();
         tracing::info!("create and/or open database: {:?}", config.db_dir_path);
 
-        let tree = tokio::task::spawn_blocking(|| sled::open(path).map_err(Error::Db))
+        let tree = tokio::task::spawn_blocking(|| sled::open(path).map_err(Error::SledDb))
             .map_err(Error::Join)
             .await??;
         Self::migrate_tokens(&tree).await?;
 
-        if !tree.contains_key(SCHEMA_VERSION_KEY).map_err(Error::Db)? {
+        if !tree
+            .contains_key(SCHEMA_VERSION_KEY)
+            .map_err(Error::SledDb)?
+        {
             tree.insert(SCHEMA_VERSION_KEY, &SCHEMA_VERSION)
                 .map(drop)
-                .map_err(Error::Db)?;
-            tree.flush_async().map_err(Error::Db).await?;
+                .map_err(Error::SledDb)?;
+            tree.flush_async().map_err(Error::SledDb).await?;
         }
 
         let db_manager = SledDbManager {
@@ -386,7 +389,7 @@ impl DbManager for SledDbManager {
                             None
                         }
                     }
-                    Err(e) => Some(Err(Error::Db(e))),
+                    Err(e) => Some(Err(Error::SledDb(e))),
                 }
             })
             .partition(Result::is_ok);
@@ -513,7 +516,7 @@ impl SledDbManager {
     {
         self.tree
             .get(key)
-            .map_err(Error::Db)?
+            .map_err(Error::SledDb)?
             .map(|v| v.to_vec())
             .map(String::from_utf8)
             .transpose()
@@ -534,23 +537,25 @@ impl SledDbManager {
         self.tree
             .insert(key, json_string.as_str())
             .map(drop)
-            .map_err(Error::Db)?;
+            .map_err(Error::SledDb)?;
         self.tree
             .flush_async()
             .map_ok(drop)
-            .map_err(Error::Db)
+            .map_err(Error::SledDb)
             .await
     }
 
     #[tracing::instrument(skip(tree))]
     async fn migrate_tokens(tree: &Db) -> Result<(), Error> {
-        let schema_version_on_disk: Option<[u8; 8]> =
-            tree.get(SCHEMA_VERSION_KEY).map_err(Error::Db)?.map(|v| {
+        let schema_version_on_disk: Option<[u8; 8]> = tree
+            .get(SCHEMA_VERSION_KEY)
+            .map_err(Error::SledDb)?
+            .map(|v| {
                 let mut buf: [u8; 8] = [0u8; 8];
                 buf.clone_from_slice(&v);
                 buf
             });
-        let tokens = tree.get(OLD_TOKENS_KEY).map_err(Error::Db)?;
+        let tokens = tree.get(OLD_TOKENS_KEY).map_err(Error::SledDb)?;
 
         if schema_version_on_disk.is_none() && tokens.is_some() {
             tracing::info!(
@@ -570,8 +575,8 @@ impl SledDbManager {
                 Ok(())
             })
             .map(drop)
-            .map_err(Error::Transaction)?;
-            tree.flush_async().map_ok(drop).map_err(Error::Db).await
+            .map_err(Error::SledTransaction)?;
+            tree.flush_async().map_ok(drop).map_err(Error::SledDb).await
         } else {
             Ok(())
         }

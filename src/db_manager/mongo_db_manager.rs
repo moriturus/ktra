@@ -70,7 +70,7 @@ impl DbManager for MongoDbManager {
             let options = ClientOptions::parse(url.as_str()).await?;
             let client = Client::with_options(options)?;
             let db = client.database(&database_name);
-            let collection = db.collection(SCHEMA_VERSION_KEY);
+            let collection = db.collection::<Document>(SCHEMA_VERSION_KEY);
 
             if collection.estimated_document_count(None).await? == 0 {
                 collection
@@ -86,7 +86,7 @@ impl DbManager for MongoDbManager {
             Ok(db_manager)
         };
 
-        initialization.map_err(Error::Db).await
+        initialization.map_err(Error::MongoDb).await
     }
 
     async fn get_login_prefix(&self) -> Result<&str, Error> {
@@ -114,7 +114,7 @@ impl DbManager for MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(ENTRIES_KEY);
+            .collection::<Document>(ENTRIES_KEY);
         let cursor = collection
             .aggregate(
                 vec![
@@ -147,10 +147,10 @@ impl DbManager for MongoDbManager {
                 ],
                 None,
             )
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?;
         let results: Vec<Result<User, Error>> = cursor
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .map(|d| d.and_then(|d| from_document::<User>(d).map_err(Error::BsonDeserialization)))
             .collect()
             .await;
@@ -187,7 +187,7 @@ impl DbManager for MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(TOKENS_KEY);
+            .collection::<Document>(TOKENS_KEY);
         let mut cursor = collection
             .aggregate(
                 vec![doc! {
@@ -200,13 +200,13 @@ impl DbManager for MongoDbManager {
                 }],
                 None,
             )
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?;
         let last_user_id = cursor
             .next()
             .await
             .transpose()
-            .map_err(Error::Db)?
+            .map_err(Error::MongoDb)?
             .and_then(|d| d.get("last").cloned())
             .and_then(|b| b.as_i64())
             .map(|i| i as u32);
@@ -218,10 +218,10 @@ impl DbManager for MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(TOKENS_KEY);
+            .collection::<Document>(TOKENS_KEY);
         collection
             .find_one(doc! { "token": token }, None)
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?
             .and_then(|d| d.get("id").cloned())
             .and_then(|b| b.as_i64())
@@ -236,10 +236,10 @@ impl DbManager for MongoDbManager {
                 let collection = self
                     .client
                     .database(&self.database_name)
-                    .collection(TOKENS_KEY);
+                    .collection::<Document>(TOKENS_KEY);
                 Ok(collection
                     .find_one(doc! { "id": user.id }, None)
-                    .map_err(Error::Db)
+                    .map_err(Error::MongoDb)
                     .await?
                     .and_then(|d| d.get("token").cloned())
                     .and_then(|b| b.as_str().map(ToString::to_string)))
@@ -255,10 +255,10 @@ impl DbManager for MongoDbManager {
                 let collection = self
                     .client
                     .database(&self.database_name)
-                    .collection(TOKENS_KEY);
+                    .collection::<Document>(TOKENS_KEY);
                 Ok(collection
                     .find_one(doc! { "id": user.id }, None)
-                    .map_err(Error::Db)
+                    .map_err(Error::MongoDb)
                     .await?
                     .and_then(|d| d.get("token").cloned())
                     .and_then(|b| b.as_str().map(ToString::to_string)))
@@ -290,11 +290,11 @@ impl DbManager for MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(USERS_KEY);
+            .collection::<Document>(USERS_KEY);
 
         collection
             .find_one(doc! { "login": login.clone() }, None)
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?
             .map(from_document::<User>)
             .transpose()
@@ -308,12 +308,12 @@ impl DbManager for MongoDbManager {
         let users_collection = self
             .client
             .database(&self.database_name)
-            .collection(USERS_KEY);
+            .collection::<Document>(USERS_KEY);
         let user_query_document = doc! {"login": user.login.clone() };
 
         if users_collection
             .find_one(user_query_document.clone(), None)
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?
             .is_some()
         {
@@ -339,10 +339,10 @@ impl DbManager for MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(PASSWORDS_KEY);
+            .collection::<Document>(PASSWORDS_KEY);
         let encoded_password = collection
             .find_one(doc! { "id": user_id }, None)
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?
             .map(from_document::<PasswordMap>)
             .transpose()
@@ -370,10 +370,10 @@ impl DbManager for MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(PASSWORDS_KEY);
+            .collection::<Document>(PASSWORDS_KEY);
         let encoded_old_password = collection
             .find_one(doc! { "id": user_id }, None)
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?
             .map(from_document::<PasswordMap>)
             .transpose()
@@ -493,7 +493,7 @@ impl DbManager for MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(ENTRIES_KEY);
+            .collection::<Document>(ENTRIES_KEY);
         let cursor = collection
             .find(
                 Some(doc! {
@@ -504,10 +504,10 @@ impl DbManager for MongoDbManager {
                 }),
                 None,
             )
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?;
         let (entries, errors): (Vec<_>, Vec<_>) = cursor
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .and_then(|document| async {
                 from_document::<EntryMap>(document).map_err(Error::BsonDeserialization)
             })
@@ -549,7 +549,7 @@ impl DbManager for MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(OAUTH_NONCES_KEY);
+            .collection::<Document>(OAUTH_NONCES_KEY);
         let nonces_query_document = doc! {"state": state.secret().to_string() };
 
         self.update_or_insert_one(OAUTH_NONCES_KEY, nonces_query_document, nonce)
@@ -564,11 +564,11 @@ impl DbManager for MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(OAUTH_NONCES_KEY);
+            .collection::<Document>(OAUTH_NONCES_KEY);
 
         collection
             .find_one(doc! { "state": state.secret().to_string() }, None)
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?
             .map(from_document::<openidconnect::Nonce>)
             .transpose()
@@ -590,7 +590,7 @@ impl MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(USERS_KEY);
+            .collection::<Document>(USERS_KEY);
         let cursor = collection
             .find(
                 doc! {
@@ -600,10 +600,10 @@ impl MongoDbManager {
                 },
                 None,
             )
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?;
         let (ids, errors): (Vec<_>, Vec<_>) = cursor
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .and_then(|d| async { from_document::<User>(d).map_err(Error::BsonDeserialization) })
             .map_ok(|u| u.id)
             .collect::<Vec<_>>()
@@ -634,10 +634,10 @@ impl MongoDbManager {
         let collection = self
             .client
             .database(&self.database_name)
-            .collection(ENTRIES_KEY);
+            .collection::<Document>(ENTRIES_KEY);
         let entry = collection
             .find_one(doc! { "name": normalized_crate_name }, None)
-            .map_err(Error::Db)
+            .map_err(Error::MongoDb)
             .await?
             .and_then(|d| d.get("entry").and_then(|b| b.as_document()).cloned())
             .map(from_document::<Entry>)
@@ -685,7 +685,7 @@ impl MongoDbManager {
 
         let insertion = async {
             let db = self.client.database(&self.database_name);
-            let collection = db.collection(ENTRIES_KEY);
+            let collection = db.collection::<Document>(ENTRIES_KEY);
             let options = UpdateOptions::builder().upsert(true).build();
             collection
                 .update_one(
@@ -697,7 +697,7 @@ impl MongoDbManager {
                 .await
         };
 
-        insertion.map_err(Error::Db).await
+        insertion.map_err(Error::MongoDb).await
     }
 
     #[tracing::instrument(skip(self, collection_name, query, value))]
@@ -711,7 +711,7 @@ impl MongoDbManager {
 
         let insertion = async {
             let db = self.client.database(&self.database_name);
-            let collection = db.collection(collection_name);
+            let collection = db.collection::<Document>(collection_name);
             let options = UpdateOptions::builder().upsert(true).build();
             collection
                 .update_one(query, document, Some(options))
@@ -719,6 +719,6 @@ impl MongoDbManager {
                 .await
         };
 
-        insertion.map_err(Error::Db).await
+        insertion.map_err(Error::MongoDb).await
     }
 }

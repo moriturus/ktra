@@ -115,8 +115,10 @@ pub fn with_openid_config(
 }
 
 #[tracing::instrument]
-pub fn authorization_header() -> impl Filter<Extract = (String,), Error = Rejection> + Copy {
-    warp::header::<String>("Authorization")
+pub fn authorization_header() -> impl Filter<Extract = (String,), Error = Rejection> + Clone {
+    warp::header::optional::<String>("Authorization").and_then(|header: Option<String>| async {
+        header.ok_or_else(|| warp::reject::custom(Error::MissingAuthorization))
+    })
 }
 
 #[cfg(test)]

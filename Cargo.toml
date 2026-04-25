@@ -17,13 +17,13 @@ default = ["secure-auth", "db-sled", "crates-io-mirroring"]
 secure-auth = ["rand", "rust-argon2"]
 crates-io-mirroring = ["reqwest", "tokio-util"]
 mirroring-dummy = []
-openid = ["openidconnect", "reqwest"]
+openid = ["openidconnect", "reqwest", "secure-auth", "db-sled"]
 db-sled = ["sled"]
 db-redis = ["redis"]
 db-mongo = ["mongodb", "bson"]
 
 [dependencies]
-tokio = { version = "1.1", features = ["macros", "rt-multi-thread", "fs", "io-util"] }
+tokio = { version = "1.1", features = ["macros", "rt-multi-thread", "fs", "io-util", "time"] }
 warp = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -36,7 +36,7 @@ semver = { version = "0.11", features = ["serde"] }
 url = { version = "2.2", features = ["serde"] }
 anyhow = "1.0"
 thiserror = "1.0"
-git2 = "0.13"
+git2 = "0.20"
 bytes = "1.0"
 sha2 = "0.9"
 toml = "0.5"
@@ -51,7 +51,7 @@ rust-argon2 = { version = "0.8", optional = true }
 
 sled = { version = "0.34", optional = true }
 redis = { version = "0.19", features = ["tokio-comp"], optional = true }
-mongodb = { version = "1.1", optional = true }
-bson = { version = "1.1", features = ["u2i"], optional = true }
+mongodb = { version = "2", optional = true }
+bson = { version = "2", optional = true }
 
 openidconnect = { version = "2.1.1", optional = true }

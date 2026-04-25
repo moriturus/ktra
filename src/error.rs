@@ -82,10 +82,12 @@ pub enum Error {
     InvalidCrateName(String),
     #[error("invalid token: {}", _0)]
     InvalidToken(String),
+    #[error("authorization header is required")]
+    MissingAuthorization,
     #[cfg(feature = "openid")]
     #[error("invalid csrf state: {}", _0)]
     InvalidCsrfToken(String),
-    #[error("invalid user id: {}", _0)]
+    #[error("user is not authorized for this operation")]
     InvalidUser(u32),
     #[error("invalid username: {}", _0)]
     InvalidUsername(String),
@@ -108,30 +110,18 @@ pub enum Error {
         _0
     )]
     VersionNotFoundInDb(Version),
-    #[cfg(all(
-        feature = "db-sled",
-        not(all(feature = "db-redis", feature = "db-mongo"))
-    ))]
+    #[cfg(feature = "db-sled")]
     #[error("error by database: {}", _0)]
-    Db(sled::Error),
-    #[cfg(all(
-        feature = "db-sled",
-        not(all(feature = "db-redis", feature = "db-mongo"))
-    ))]
+    SledDb(sled::Error),
+    #[cfg(feature = "db-sled")]
     #[error("error by database: {}", _0)]
-    Transaction(sled::transaction::TransactionError),
-    #[cfg(all(
-        feature = "db-redis",
-        not(all(feature = "db-sled", feature = "db-mongo"))
-    ))]
+    SledTransaction(sled::transaction::TransactionError),
+    #[cfg(feature = "db-redis")]
     #[error("error by database: {}", _0)]
-    Db(redis::RedisError),
-    #[cfg(all(
-        feature = "db-mongo",
-        not(all(feature = "db-sled", feature = "db-redis"))
-    ))]
+    RedisDb(redis::RedisError),
+    #[cfg(feature = "db-mongo")]
     #[error("error by database: {}", _0)]
-    Db(mongodb::error::Error),
+    MongoDb(mongodb::error::Error),
     #[error("multiple errors: {:?}", _0)]
     Multiple(Vec<Error>),
     #[error("task joinning error: {}", _0)]
@@ -154,6 +144,7 @@ impl Error {
             Error::CrateNotFoundInDb(_) | Error::VersionNotFoundInDb(_) => {
                 warp::http::StatusCode::NOT_FOUND
             }
+            Error::MissingAuthorization => warp::http::StatusCode::BAD_REQUEST,
             Error::InvalidToken(_) | Error::InvalidUser(_) => warp::http::StatusCode::FORBIDDEN,
             _ => warp::http::StatusCode::OK,
         };

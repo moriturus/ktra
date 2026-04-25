@@ -243,8 +243,9 @@ fn fetch<'a>(
     let refspec = format!("refs/heads/{0}:refs/remotes/origin/{}", config.branch);
     remote.fetch(&[refspec], Some(&mut fetch_options), None)?;
 
-    let fetch_head = repository.find_reference("FETCH_HEAD")?;
-    repository.reference_to_annotated_commit(&fetch_head)
+    let remote_refname = format!("refs/remotes/origin/{}", config.branch);
+    let remote_reference = repository.find_reference(&remote_refname)?;
+    repository.reference_to_annotated_commit(&remote_reference)
 }
 
 #[tracing::instrument(skip(repository, reference, annotated_commit))]
@@ -357,7 +358,7 @@ fn add_all(repository: &Repository) -> Result<(), git2::Error> {
 }
 
 #[tracing::instrument(skip(repository))]
-fn find_last_commit(repository: &Repository) -> Result<Commit, git2::Error> {
+fn find_last_commit(repository: &Repository) -> Result<Commit<'_>, git2::Error> {
     let obj = repository.head()?.resolve()?.peel(ObjectType::Commit)?;
     obj.into_commit()
         .map_err(|_| git2::Error::from_str("Couldn't find commit"))

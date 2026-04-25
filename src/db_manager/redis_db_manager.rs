@@ -41,7 +41,9 @@ impl DbManager for RedisDbManager {
             let mut connection = client.get_async_connection().await?;
 
             if !connection.exists(SCHEMA_VERSION_KEY).await? {
-                connection.set(SCHEMA_VERSION_KEY, &SCHEMA_VERSION).await?;
+                connection
+                    .set::<_, _, ()>(SCHEMA_VERSION_KEY, &SCHEMA_VERSION)
+                    .await?;
             }
 
             let db_manager = RedisDbManager {
@@ -51,7 +53,7 @@ impl DbManager for RedisDbManager {
             Ok(db_manager)
         };
 
-        initialization.map_err(Error::Db).await
+        initialization.map_err(Error::RedisDb).await
     }
 
     async fn get_login_prefix(&self) -> Result<&str, Error> {
@@ -359,10 +361,12 @@ impl DbManager for RedisDbManager {
         let mut connection = self
             .client
             .get_async_connection()
-            .map_err(Error::Db)
+            .map_err(Error::RedisDb)
             .await?;
-        let entries: HashMap<String, String> =
-            connection.hgetall(ENTRIES_KEY).map_err(Error::Db).await?;
+        let entries: HashMap<String, String> = connection
+            .hgetall(ENTRIES_KEY)
+            .map_err(Error::RedisDb)
+            .await?;
         let (entries, errors): (HashMap<_, _>, HashMap<_, _>) = entries
             .into_iter()
             .map(|(name, json_string)| {
@@ -475,11 +479,11 @@ impl RedisDbManager {
         let mut connection = self
             .client
             .get_async_connection()
-            .map_err(Error::Db)
+            .map_err(Error::RedisDb)
             .await?;
         let entry: Option<String> = connection
             .hget(ENTRIES_KEY, &normalized_crate_name)
-            .map_err(Error::Db)
+            .map_err(Error::RedisDb)
             .await?;
         let entry: Option<Entry> = entry
             .map(|s| serde_json::from_str(&s))
@@ -527,9 +531,9 @@ impl RedisDbManager {
         let mut connection = self
             .client
             .get_async_connection()
-            .map_err(Error::Db)
+            .map_err(Error::RedisDb)
             .await?;
-        let string: Option<String> = connection.get(key).map_err(Error::Db).await?;
+        let string: Option<String> = connection.get(key).map_err(Error::RedisDb).await?;
         string
             .map(|s| serde_json::from_str::<T>(&s))
             .transpose()
@@ -544,12 +548,12 @@ impl RedisDbManager {
         let insertion = async {
             let mut connection = self.client.get_async_connection().await?;
             connection
-                .hset(ENTRIES_KEY, normalized_crate_name, json_string)
+                .hset::<_, _, _, ()>(ENTRIES_KEY, normalized_crate_name, json_string)
                 .await?;
             Ok(())
         };
 
-        insertion.map_err(Error::Db).await
+        insertion.map_err(Error::RedisDb).await
     }
 
     #[tracing::instrument(skip(self, key, value))]
@@ -558,10 +562,10 @@ impl RedisDbManager {
 
         let insertion = async {
             let mut connection = self.client.get_async_connection().await?;
-            connection.set(key, json_string).await?;
+            connection.set::<_, _, ()>(key, json_string).await?;
             Ok(())
         };
 
-        insertion.map_err(Error::Db).await
+        insertion.map_err(Error::RedisDb).await
     }
 }

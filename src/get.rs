@@ -13,8 +13,12 @@ use std::sync::Arc;
 #[cfg(feature = "crates-io-mirroring")]
 use tokio::fs::OpenOptions;
 #[cfg(feature = "crates-io-mirroring")]
+use tokio::io::AsyncReadExt;
+#[cfg(feature = "crates-io-mirroring")]
 use tokio::io::{AsyncWriteExt, BufWriter};
-use tokio::{io::AsyncReadExt, sync::RwLock};
+use tokio::sync::RwLock;
+#[cfg(feature = "crates-io-mirroring")]
+use tokio::time::{sleep, Duration};
 #[cfg(feature = "crates-io-mirroring")]
 use url::Url;
 #[cfg(feature = "crates-io-mirroring")]
@@ -22,6 +26,9 @@ use warp::http::Response;
 #[cfg(feature = "crates-io-mirroring")]
 use warp::hyper::body::Bytes;
 use warp::{filters::BoxedFilter, Filter, Rejection, Reply};
+
+#[cfg(feature = "crates-io-mirroring")]
+const CRATES_IO_DOWNLOAD_ATTEMPTS: usize = 3;
 
 #[cfg(not(feature = "crates-io-mirroring"))]
 #[tracing::instrument(skip(db_manager, dl_dir_path, path))]
@@ -126,13 +133,7 @@ async fn cache_crate_file(
             let crate_file_url = crates_io_base_url
                 .join(&crate_components)
                 .map_err(Error::UrlParsing)?;
-            let body = http_client
-                .get(crate_file_url)
-                .send()
-                .and_then(|res| async move { res.error_for_status() })
-                .and_then(|res| res.bytes())
-                .map_err(Error::HttpRequest)
-                .await?;
+            let body = download_crate_file(http_client, crate_file_url).await?;
 
             if body.is_empty() {
                 return Err(Error::InvalidHttpResponseLength);
@@ -146,6 +147,35 @@ async fn cache_crate_file(
     };
 
     computation.map_err(warp::reject::custom).await
+}
+
+#[cfg(feature = "crates-io-mirroring")]
+#[tracing::instrument(skip(http_client, crate_file_url))]
+async fn download_crate_file(http_client: Client, crate_file_url: Url) -> Result<Bytes, Error> {
+    for attempt in 1..=CRATES_IO_DOWNLOAD_ATTEMPTS {
+        let result = http_client
+            .get(crate_file_url.clone())
+            .send()
+            .and_then(|res| async move { res.error_for_status() })
+            .and_then(|res| res.bytes())
+            .await;
+
+        match result {
+            Ok(body) => return Ok(body),
+            Err(error) if attempt < CRATES_IO_DOWNLOAD_ATTEMPTS => {
+                tracing::warn!(
+                    "failed to download mirrored crate file on attempt {}/{}: {}",
+                    attempt,
+                    CRATES_IO_DOWNLOAD_ATTEMPTS,
+                    error
+                );
+                sleep(Duration::from_millis(200 * attempt as u64)).await;
+            }
+            Err(error) => return Err(Error::HttpRequest(error)),
+        }
+    }
+
+    unreachable!("download retry loop always returns on the final attempt")
 }
 
 #[cfg(feature = "crates-io-mirroring")]

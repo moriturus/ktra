@@ -322,3 +322,29 @@ pub struct Claims {
     // This property is used when gitlab_authorized_groups is set in the configuration
     pub(crate) groups: Option<Vec<String>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Dependency, MetadataDependency};
+    use semver::VersionReq;
+
+    #[test]
+    fn aliased_dependency_uses_local_name_and_package_name() {
+        let dependency = MetadataDependency {
+            name: "hello".to_owned(),
+            version_req: VersionReq::parse("*").expect("version requirement should parse"),
+            features: Vec::new(),
+            optional: false,
+            default_features: true,
+            target: None,
+            kind: None,
+            registry: None,
+            explicit_name_in_toml: Some("hello-world".to_owned()),
+        };
+
+        let dependency = Dependency::from(dependency);
+
+        assert_eq!(dependency.name, "hello-world");
+        assert_eq!(dependency.package.as_deref(), Some("hello"));
+    }
+}
