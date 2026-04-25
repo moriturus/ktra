@@ -9,85 +9,83 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/ktra
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
+
     steps:
+      - uses: actions/checkout@v6
 
-    - uses: actions/checkout@v2
-  
-    - name: Set env
-      run: |
-        if [ "${{ github.event_name }}" = "push" ] && [ ! "`echo $GITHUB_REF | grep develop`" ]; then
-            echo "TAG=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
-        else
-            echo "TAG=latest" >> $GITHUB_ENV
-        fi
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
-    
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v1
-      with:
-        registry: ghcr.io
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.CR_PAT }}
-    
-    - name: "`db-redis` build and push"
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        file: ./docker/ktra.Dockerfile
-        tags: ghcr.io/${{ github.repository_owner }}/ktra:db-redis-${{ env.TAG }}
-        no-cache: true
-        build-args: |
-          DB=db-redis
-        push: true
-    
-    - name: "`db-mongo` build and push"
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        file: ./docker/ktra.Dockerfile
-        tags: ghcr.io/${{ github.repository_owner }}/ktra:db-mongo-${{ env.TAG }}
-        no-cache: true
-        build-args: |
-          DB=db-mongo
-        push: true
-    
-    - name: "`db-sled` build and push"
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        file: ./docker/ktra.Dockerfile
-        tags: ghcr.io/${{ github.repository_owner }}/ktra:${{ env.TAG }}
-        push: true
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
-    - name: "`db-redis + openid` build and push"
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        file: ./docker/ktra_openid.Dockerfile
-        tags: ghcr.io/${{ github.repository_owner }}/ktra:db-redis-openid-${{ env.TAG }}
-        no-cache: true
-        build-args: |
-          DB=db-redis
-        push: true
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: "`db-mongo + openid` build and push"
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        file: ./docker/ktra_openid.Dockerfile
-        tags: ghcr.io/${{ github.repository_owner }}/ktra:db-mongo-openid-${{ env.TAG }}
-        no-cache: true
-        build-args: |
-          DB=db-mongo
-        push: true
+      - name: "`db-redis` build and push"
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/ktra.Dockerfile
+          tags: ${{ env.IMAGE_NAME }}:db-redis-${{ env.TAG }}
+          no-cache: true
+          build-args: |
+            DB=db-redis
+          push: true
 
-    - name: "`db-sled + openid` build and push"
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        file: ./docker/ktra_openid.Dockerfile
-        tags: ghcr.io/${{ github.repository_owner }}/ktra:openid-${{ env.TAG }}
-        push: true
+      - name: "`db-mongo` build and push"
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/ktra.Dockerfile
+          tags: ${{ env.IMAGE_NAME }}:db-mongo-${{ env.TAG }}
+          no-cache: true
+          build-args: |
+            DB=db-mongo
+          push: true
+
+      - name: "`db-sled` build and push"
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/ktra.Dockerfile
+          tags: ${{ env.IMAGE_NAME }}:${{ env.TAG }}
+          push: true
+
+      - name: "`db-redis + openid` build and push"
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/ktra_openid.Dockerfile
+          tags: ${{ env.IMAGE_NAME }}:db-redis-openid-${{ env.TAG }}
+          no-cache: true
+          build-args: |
+            DB=db-redis
+          push: true
+
+      - name: "`db-mongo + openid` build and push"
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/ktra_openid.Dockerfile
+          tags: ${{ env.IMAGE_NAME }}:db-mongo-openid-${{ env.TAG }}
+          no-cache: true
+          build-args: |
+            DB=db-mongo
+          push: true
+
+      - name: "`db-sled + openid` build and push"
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./docker/ktra_openid.Dockerfile
+          tags: ${{ env.IMAGE_NAME }}:openid-${{ env.TAG }}
+          push: true
