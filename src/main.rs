@@ -14,7 +14,7 @@ mod utils;
 
 use crate::config::Config;
 use crate::index_manager::IndexManager;
-use clap::{clap_app, crate_authors, crate_version, ArgMatches};
+use clap::{ArgMatches, clap_app, crate_authors, crate_version};
 use db_manager::DbManager;
 #[cfg(feature = "crates-io-mirroring")]
 use reqwest::Client;

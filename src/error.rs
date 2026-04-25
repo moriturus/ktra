@@ -48,7 +48,10 @@ pub enum Error {
     SamePasswords,
     #[error("the user identified '{}' already exists", _0)]
     UserExists(String),
-    #[error("the crate, {}, is overlapped with the another one because ktra considers '_' and '-' are the same", _0)]
+    #[error(
+        "the crate, {}, is overlapped with the another one because ktra considers '_' and '-' are the same",
+        _0
+    )]
     OverlappedCrateName(String),
     #[error("the crate, {} v{}, already exists", _0, _1)]
     VersionExists(String, semver::Version),

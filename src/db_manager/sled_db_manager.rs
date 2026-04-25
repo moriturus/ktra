@@ -12,8 +12,8 @@ use serde::ser::Serialize;
 use sled::{self, Db};
 use std::collections::HashMap;
 
-use crate::db_manager::utils::{argon2_config_and_salt, check_crate_name, normalized_crate_name};
 use crate::db_manager::DbManager;
+use crate::db_manager::utils::{argon2_config_and_salt, check_crate_name, normalized_crate_name};
 
 type TokenMap = HashMap<u32, String>;
 

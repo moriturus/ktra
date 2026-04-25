@@ -2,7 +2,7 @@
 name = "ktra"
 version = "0.7.0"
 authors = ["moriturus <moriturus@alimensir.com>"]
-edition = "2018"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Your Little Cargo Registry"
 repository = "https://github.com/moriturus/ktra"

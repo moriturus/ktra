@@ -5,21 +5,21 @@ use crate::error::Error;
 use crate::models::{Entry, Metadata, Query, Search, User};
 use argon2::{self, hash_encoded, verify_encoded};
 use async_trait::async_trait;
-use bson::{doc, from_document, to_document, Document};
+use bson::{Document, doc, from_document, to_document};
+use futures::TryFutureExt;
 use futures::stream::StreamExt;
 use futures::stream::TryStreamExt;
-use futures::TryFutureExt;
 use mongodb::{
-    options::{ClientOptions, UpdateOptions},
     Client,
+    options::{ClientOptions, UpdateOptions},
 };
 use semver::Version;
 use serde::ser::Serialize;
 use serde::{Deserialize as DeserializeTrait, Serialize as SerializeTrait};
 use url::Url;
 
-use crate::db_manager::utils::{argon2_config_and_salt, check_crate_name, normalized_crate_name};
 use crate::db_manager::DbManager;
+use crate::db_manager::utils::{argon2_config_and_salt, check_crate_name, normalized_crate_name};
 
 const SCHEMA_VERSION_KEY: &str = "__SCHEMA_VERSION__";
 const SCHEMA_VERSION: i64 = 1;

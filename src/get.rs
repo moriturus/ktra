@@ -18,14 +18,14 @@ use tokio::io::AsyncReadExt;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::RwLock;
 #[cfg(feature = "crates-io-mirroring")]
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 #[cfg(feature = "crates-io-mirroring")]
 use url::Url;
 #[cfg(feature = "crates-io-mirroring")]
 use warp::http::Response;
 #[cfg(feature = "crates-io-mirroring")]
 use warp::hyper::body::Bytes;
-use warp::{filters::BoxedFilter, Filter, Rejection, Reply};
+use warp::{Filter, Rejection, Reply, filters::BoxedFilter};
 
 #[cfg(feature = "crates-io-mirroring")]
 const CRATES_IO_DOWNLOAD_ATTEMPTS: usize = 3;
