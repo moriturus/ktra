@@ -1,4 +1,4 @@
-FROM rust:1.67-slim-bullseye as builder
+FROM rust:1.85-slim-bullseye AS builder
 
 ARG DB="db-sled"
 ARG MIRRORING="crates-io-mirroring"
